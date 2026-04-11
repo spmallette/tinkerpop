@@ -250,4 +250,17 @@ public class QueryGraphTest {
     public void testMissingMatchKeywordThrows() {
         QueryGraph.parse("(a)-[:KNOWS]->(b)");
     }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testConflictingLabelOnSameVariableThrows() {
+        QueryGraph.parse("MATCH (n:Person)-[:KNOWS]->(n:Animal)");
+    }
+
+    @Test
+    public void testSameVariableSameLabelIsAllowed() {
+        // Same variable, same label — no conflict
+        final QueryGraph g = QueryGraph.parse("MATCH (n:Person)-[:KNOWS]->(n:Person)");
+        assertEquals(1, g.getNodes().size());
+        assertEquals("Person", g.getNodes().get(0).getLabel());
+    }
 }
