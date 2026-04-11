@@ -31,7 +31,6 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * The logical graph structure produced by parsing a GQL MATCH clause. A {@code QueryGraph}
@@ -118,19 +117,18 @@ public final class QueryGraph {
         final Map<String, QueryNode> nodesByVar = new LinkedHashMap<>();
         final List<QueryNode> nodes = new ArrayList<>();
         final List<QueryEdge> edges = new ArrayList<>();
-        final AtomicInteger anonCounter = new AtomicInteger(0);
 
         for (final GQLParser.PatternContext patternCtx : ctx.patternList().pattern()) {
             final List<GQLParser.NodePatternContext> nodeCtxs = patternCtx.nodePattern();
             final List<GQLParser.EdgePatternContext> edgeCtxs = patternCtx.edgePattern();
 
             // Build the first node in this chain
-            QueryNode current = resolveNode(nodeCtxs.get(0), nodesByVar, nodes, anonCounter);
+            QueryNode current = resolveNode(nodeCtxs.get(0), nodesByVar, nodes);
 
             // Walk the (edgePattern nodePattern)* chain
             for (int i = 0; i < edgeCtxs.size(); i++) {
                 final GQLParser.EdgePatternContext edgeCtx = edgeCtxs.get(i);
-                final QueryNode next = resolveNode(nodeCtxs.get(i + 1), nodesByVar, nodes, anonCounter);
+                final QueryNode next = resolveNode(nodeCtxs.get(i + 1), nodesByVar, nodes);
 
                 final String edgeVar = extractEdgeVariable(edgeCtx);
                 final String edgeLabel = extractEdgeLabel(edgeCtx);
@@ -150,8 +148,7 @@ public final class QueryGraph {
 
     private static QueryNode resolveNode(final GQLParser.NodePatternContext ctx,
                                          final Map<String, QueryNode> nodesByVar,
-                                         final List<QueryNode> nodes,
-                                         final AtomicInteger anonCounter) {
+                                         final List<QueryNode> nodes) {
         final GQLParser.NodeContentsContext contents = ctx.nodeContents();
         final String var;
         final String label;
@@ -169,17 +166,26 @@ public final class QueryGraph {
         }
 
         if (var != null) {
-            // Reuse existing node with this variable name
-            return nodesByVar.computeIfAbsent(var, v -> {
-                final QueryNode n = new QueryNode(v, label);
-                nodes.add(n);
-                return n;
-            });
+            // Reuse existing node with this variable name. If the same variable appears
+            // with different label constraints (e.g. MATCH (n:Person)-[:K]->(n:Animal)),
+            // reject it — a variable must refer to a single consistent node type.
+            if (nodesByVar.containsKey(var)) {
+                final QueryNode existing = nodesByVar.get(var);
+                if (label != null && !label.equals(existing.getLabel())) {
+                    throw new IllegalArgumentException(
+                            "Variable '" + var + "' is used with conflicting label constraints: '"
+                            + existing.getLabel() + "' vs '" + label + "'");
+                }
+                return existing;
+            }
+            final QueryNode n = new QueryNode(var, label);
+            nodesByVar.put(var, n);
+            nodes.add(n);
+            return n;
         } else {
             // Anonymous node — always a new instance
             final QueryNode n = new QueryNode(null, label);
             nodes.add(n);
-            anonCounter.incrementAndGet();
             return n;
         }
     }
