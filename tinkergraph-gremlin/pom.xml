@@ -32,6 +32,11 @@ limitations under the License.
             <version>${project.version}</version>
         </dependency>
         <dependency>
+            <groupId>org.antlr</groupId>
+            <artifactId>antlr4-runtime</artifactId>
+            <version>${antlr4.version}</version>
+        </dependency>
+        <dependency>
             <groupId>org.apache.commons</groupId>
             <artifactId>commons-lang3</artifactId>
         </dependency>
@@ -56,6 +61,29 @@ limitations under the License.
         <directory>${basedir}/target</directory>
         <finalName>${project.artifactId}-${project.version}</finalName>
         <plugins>
+            <plugin>
+                <groupId>org.antlr</groupId>
+                <artifactId>antlr4-maven-plugin</artifactId>
+                <version>${antlr4.version}</version>
+                <executions>
+                    <execution>
+                        <id>antlr-gql</id>
+                        <goals>
+                            <goal>antlr4</goal>
+                        </goals>
+                        <configuration>
+                            <arguments>
+                                <argument>-package</argument>
+                                <argument>org.apache.tinkerpop.gremlin.tinkergraph.language.gql</argument>
+                                <argument>-encoding</argument>
+                                <argument>utf-8</argument>
+                            </arguments>
+                            <visitor>true</visitor>
+                            <outputDirectory>${project.build.directory}/generated-sources/antlr4/org/apache/tinkerpop/gremlin/tinkergraph/language/gql/</outputDirectory>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
