@@ -30,13 +30,37 @@ import java.util.List;
  * {@link ExtensionStep} per edge in the {@link QueryGraph}, ordered so each step's anchor
  * variable is bound before the step executes. The executor iterates these steps to perform
  * DFS backtracking pattern matching.
+ *
+ * <p>The seed node is described by {@link #getSeedVariable()} and {@link #getSeedLabel()}.
+ * The executor binds the seed variable first (iterating all vertices matching the seed label)
+ * before processing the ordered extension steps.
  */
 public final class GqlMatchPlan {
 
+    private final String seedVariable;
+    private final String seedLabel;
     private final List<ExtensionStep> steps;
 
-    public GqlMatchPlan(final List<ExtensionStep> steps) {
+    public GqlMatchPlan(final String seedVariable, final String seedLabel,
+                        final List<ExtensionStep> steps) {
+        this.seedVariable = seedVariable;
+        this.seedLabel = seedLabel;
         this.steps = Collections.unmodifiableList(steps);
+    }
+
+    /**
+     * Returns the effective variable name of the seed node. May be a synthetic name
+     * (prefixed with {@code $anon}) if the seed node has no explicit variable.
+     */
+    public String getSeedVariable() {
+        return seedVariable;
+    }
+
+    /**
+     * Returns the label constraint of the seed node, or {@code null} if unconstrained.
+     */
+    public String getSeedLabel() {
+        return seedLabel;
     }
 
     /**
@@ -55,6 +79,8 @@ public final class GqlMatchPlan {
 
     @Override
     public String toString() {
-        return "GqlMatchPlan" + steps;
+        return "GqlMatchPlan{seed=" + seedVariable +
+               (seedLabel != null ? ":" + seedLabel : "") +
+               ", steps=" + steps + "}";
     }
 }
