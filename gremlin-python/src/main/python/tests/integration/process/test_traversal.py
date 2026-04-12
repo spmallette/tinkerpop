@@ -355,6 +355,18 @@ class TestTraversal(object):
 
         drop_graph_check_count(g)
 
+    def test_match_gql_modern_graph(self, remote_connection):
+        g = traversal().with_(remote_connection)
+        results = (g.match('MATCH (p:person)-[e:knows]->(friend:person)')
+                    .select('p', 'friend')
+                    .by('name')
+                    .to_list())
+        assert len(results) == 2
+        p_names = {r['p'] for r in results}
+        friend_names = {r['friend'] for r in results}
+        assert p_names == {'marko'}
+        assert friend_names == {'josh', 'vadas'}
+
     def test_should_extract_id_from_vertex(self):
         g = traversal().with_(None)
 

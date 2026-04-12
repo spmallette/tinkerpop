@@ -533,3 +533,10 @@ class TestGremlinLang(object):
         gremlin = g.inject(p).V(p).gremlin_lang
         assert 'g.inject(ids).V(ids)' == gremlin.get_gremlin()
         assert val == gremlin.get_parameters().get('ids')
+
+    def test_match_gql_query_bytecode(self):
+        g = traversal().with_(None)
+        query = 'MATCH (p:person)-[e:knows]->(friend:person)'
+        assert ("g.match('" + query + "')") == g.match(query).gremlin_lang.get_gremlin()
+        params = {'name': 'marko'}
+        assert ("g.match('" + query + "',['name':'marko'])") == g.match(query, params).gremlin_lang.get_gremlin()
