@@ -62,3 +62,6 @@ gremlin-js/node/
 .dolt/
 *.db
 state.json
+
+# Beads / Dolt files (added by bd init)
+.beads-credential-key
