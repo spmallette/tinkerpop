@@ -45,6 +45,7 @@ These rules apply to any AI/IDE assistant operating on this repository.
 - Don't push to any branch.
 - Don't merge any PR or branch.
 - Don't create tags or releases.
+- Don't add `@author` javadoc (or similar) tags for new files, but do not remove existing ones either.
 
 ### When In Doubt
 
