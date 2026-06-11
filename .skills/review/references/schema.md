@@ -77,3 +77,10 @@ A comment on a Discussion.
 | `proposed_in` | Step | Discussion | This step was proposed/discussed here |
 | `modifies` | Discussion(pr) | Function or File | The PR modifies this code |
 
+#### `addresses` edge properties
+
+| Property | Values | Meaning |
+|----------|--------|---------|
+| `found_in` | `pr`, `diff`, `search`, `jira_body`, `devlist_body` | Where the link was discovered |
+| `found_via` | JIRA ID or URL | Which discussion contained the reference (for secondary links) |
+

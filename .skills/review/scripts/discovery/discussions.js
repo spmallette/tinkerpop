@@ -116,6 +116,47 @@ async function findMatchingProposals(repoPath, keywords) {
   }
 }
 
+function extractLinksFromText(text) {
+  const jiraRefs = [...new Set([...text.matchAll(TINKERPOP_JIRA_PATTERN)].map((m) => m[0]))];
+  const devListRefs = [...new Set([...text.matchAll(DEV_LIST_LINK_PATTERN)].map((m) => m[0]))];
+  return { jiraRefs, devListRefs };
+}
+
+async function followLinks(discussions) {
+  const secondary = [];
+
+  for (const disc of discussions) {
+    const textToScan = [disc.body || "", disc.title || ""].join("\n");
+    const { jiraRefs, devListRefs } = extractLinksFromText(textToScan);
+
+    for (const jiraId of jiraRefs) {
+      if (discussions.some((d) => d.id === jiraId)) continue;
+      const jira = await fetchJira(jiraId);
+      if (jira) {
+        secondary.push({
+          ...jira,
+          found_in: `${disc.source}_body`,
+          found_via: disc.id || disc.url,
+        });
+      }
+    }
+
+    for (const url of devListRefs) {
+      if (discussions.some((d) => d.url === url)) continue;
+      secondary.push({
+        url,
+        source: "devlist",
+        title: "(referenced thread)",
+        body: "",
+        found_in: `${disc.source}_body`,
+        found_via: disc.id || disc.url,
+      });
+    }
+  }
+
+  return secondary;
+}
+
 /**
  * Discover discussions and proposals related to a PR.
  *
@@ -125,6 +166,8 @@ async function findMatchingProposals(repoPath, keywords) {
  *   If search returns nothing, note missing.
  * - Proposals: check docs/src/dev/future/ for documents matching PR keywords.
  *   If not referenced anywhere, still check by keyword match.
+ * - Cross-reference: follow one hop from each discovered discussion to find
+ *   additional JIRAs and dev list threads referenced within them.
  *
  * @param {object} params
  * @param {string} params.prTitle - PR title
@@ -140,17 +183,19 @@ export async function discoverDiscussions(params) {
 
   const allText = [prTitle, prBody, ...prComments, diff].join("\n");
 
-  // --- JIRA ---
+  // --- JIRA (direct) ---
   const jiraMatches = [...new Set([...allText.matchAll(TINKERPOP_JIRA_PATTERN)].map((m) => m[0]))];
   const jiras = (await Promise.all(jiraMatches.map(fetchJira))).filter(Boolean);
+  for (const j of jiras) { j.found_in = "pr"; }
 
-  // --- Dev list ---
+  // --- Dev list (direct) ---
   const devListLinks = [...new Set([...allText.matchAll(DEV_LIST_LINK_PATTERN)].map((m) => m[0]))];
   const explicitDevList = devListLinks.map((url) => ({
     url,
     source: "devlist",
     title: "(linked thread)",
     body: "",
+    found_in: "pr",
   }));
 
   let searchedDevList = [];
@@ -158,7 +203,12 @@ export async function discoverDiscussions(params) {
   if (explicitDevList.length === 0 && keywords.length > 0) {
     devListSearchPerformed = true;
     searchedDevList = await searchDevList(keywords);
+    for (const d of searchedDevList) { d.found_in = "search"; }
   }
+
+  // --- Cross-reference: follow one hop from direct discoveries ---
+  const directDiscussions = [...jiras, ...explicitDevList, ...searchedDevList];
+  const secondaryDiscussions = await followLinks(directDiscussions);
 
   // --- Proposals ---
   const proposalLinks = [...allText.matchAll(/docs\/src\/dev\/future\/[^\s)\]>"]+/g)].map((m) => m[0]);
@@ -175,6 +225,8 @@ export async function discoverDiscussions(params) {
     devListMissing: explicitDevList.length === 0 && searchedDevList.length === 0,
     devListSearchPerformed,
     devListSearchKeywords: devListSearchPerformed ? keywords : [],
+
+    secondary: secondaryDiscussions,
 
     proposals,
     proposalLinked: proposalLinks.length > 0,
