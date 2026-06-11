@@ -31,6 +31,7 @@ import { coverageGaps } from "./patterns/coverage-gaps.js";
 import { highCentrality } from "./patterns/centrality.js";
 import { blastRadius } from "./patterns/blast-radius.js";
 import { createPrDiscussion } from "./enrichment/api.js";
+import { discoverDiscussions } from "./discovery/discussions.js";
 
 const exec = promisify(execFile);
 
@@ -100,6 +101,22 @@ async function classifyDomain(changedFiles) {
 }
 
 import { readFile } from "node:fs/promises";
+
+function extractKeywords(changedFiles, prTitle) {
+  const keywords = new Set();
+  for (const file of changedFiles) {
+    const parts = file.split("/");
+    const filename = parts[parts.length - 1].replace(/\.\w+$/, "");
+    if (filename.length > 3 && !["index", "package", "pom", "build"].includes(filename.toLowerCase())) {
+      keywords.add(filename);
+    }
+  }
+  const titleWords = prTitle.split(/[\s\-_:]+/).filter((w) => w.length > 3 && !/^\d+$/.test(w));
+  for (const w of titleWords.slice(0, 3)) {
+    keywords.add(w);
+  }
+  return [...keywords].slice(0, 6);
+}
 
 async function buildGuidedWalk(extraction, centralityResult, blastResult, pr, worktreePath) {
   const hotspotNames = new Set(centralityResult.hotspots.map(h => h.name));
@@ -218,7 +235,25 @@ export async function review(params) {
     ).catch(() => ({ stdout: `PR #${pr}` }));
 
     await createPrDiscussion(g, pr, prTitle.trim(), "");
-    log(`PR Discussion vertex created`);
+
+    log(`Discovering discussions...`);
+    const { stdout: diffText } = await exec(
+      "git", ["diff", "--unified=0", `${await exec("git", ["merge-base", prBranch, `${remote}/master`], { cwd: repoPath }).then(r => r.stdout.trim())}...${prBranch}`],
+      { cwd: repoPath }
+    ).catch(() => ({ stdout: "" }));
+
+    const prKeywords = extractKeywords(changedFiles, prTitle.trim());
+    const discussions = await discoverDiscussions({
+      prTitle: prTitle.trim(),
+      prBody: "",
+      prComments: [],
+      diff: diffText,
+      keywords: prKeywords,
+      repoPath,
+    });
+    log(`  jiras: ${discussions.jiras.length} found${discussions.jiraMissing ? " (none referenced)" : ""}`);
+    log(`  dev list: ${discussions.devList.length} found${discussions.devListSearchPerformed ? ` (searched: ${prKeywords.join(", ")})` : ""}`);
+    log(`  proposals: ${discussions.proposals.length} found`);
 
     log(`Running checks...`);
     const completenessResults = await completeness(g, {
@@ -252,6 +287,7 @@ export async function review(params) {
         centrality: centralityResult,
         blastRadius: blastResult,
       },
+      discussions,
       guidedWalk,
     };
 
