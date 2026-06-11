@@ -48,8 +48,13 @@ function httpGet(url) {
 
 async function fetchJira(ticketId) {
   try {
-    const url = `${JIRA_BASE}/rest/api/2/issue/${ticketId}?fields=summary,description,status,issuetype`;
+    const url = `${JIRA_BASE}/rest/api/2/issue/${ticketId}?fields=summary,description,status,issuetype,comment`;
     const data = JSON.parse(await httpGet(url));
+    const comments = (data.fields?.comment?.comments || []).map((c) => ({
+      author: c.author?.displayName || c.author?.name || "unknown",
+      body: (c.body || "").slice(0, 1000),
+      timestamp: c.created,
+    }));
     return {
       id: ticketId,
       url: `${JIRA_BASE}/browse/${ticketId}`,
@@ -58,9 +63,41 @@ async function fetchJira(ticketId) {
       body: (data.fields?.description || "").slice(0, 2000),
       status: data.fields?.status?.name || "unknown",
       type: data.fields?.issuetype?.name || "unknown",
+      comments,
     };
   } catch {
     return null;
+  }
+}
+
+async function fetchPrComments(prNumber) {
+  try {
+    const url = `https://api.github.com/repos/apache/tinkerpop/issues/${prNumber}/comments?per_page=50`;
+    const data = JSON.parse(await httpGet(url));
+    if (!Array.isArray(data)) return [];
+    return data.map((c) => ({
+      author: c.user?.login || "unknown",
+      body: (c.body || "").slice(0, 1000),
+      timestamp: c.created_at,
+    }));
+  } catch {
+    return [];
+  }
+}
+
+async function fetchPrReviewComments(prNumber) {
+  try {
+    const url = `https://api.github.com/repos/apache/tinkerpop/pulls/${prNumber}/comments?per_page=50`;
+    const data = JSON.parse(await httpGet(url));
+    if (!Array.isArray(data)) return [];
+    return data.map((c) => ({
+      author: c.user?.login || "unknown",
+      body: (c.body || "").slice(0, 1000),
+      path: c.path || "",
+      timestamp: c.created_at,
+    }));
+  } catch {
+    return [];
   }
 }
 
@@ -126,7 +163,8 @@ async function followLinks(discussions) {
   const secondary = [];
 
   for (const disc of discussions) {
-    const textToScan = [disc.body || "", disc.title || ""].join("\n");
+    const commentBodies = (disc.comments || []).map((c) => c.body).join("\n");
+    const textToScan = [disc.body || "", disc.title || "", commentBodies].join("\n");
     const { jiraRefs, devListRefs } = extractLinksFromText(textToScan);
 
     for (const jiraId of jiraRefs) {
@@ -170,18 +208,23 @@ async function followLinks(discussions) {
  *   additional JIRAs and dev list threads referenced within them.
  *
  * @param {object} params
+ * @param {number} params.pr - PR number (for fetching comments from GitHub)
  * @param {string} params.prTitle - PR title
  * @param {string} params.prBody - PR body/description
- * @param {string[]} params.prComments - PR comment bodies
  * @param {string} params.diff - The full diff text
  * @param {string[]} params.keywords - Keywords for search (class names, step names, etc.)
  * @param {string} params.repoPath - Path to the repo (for proposal discovery)
  * @returns {Promise<DiscoveryResult>}
  */
 export async function discoverDiscussions(params) {
-  const { prTitle = "", prBody = "", prComments = [], diff = "", keywords = [], repoPath = "" } = params;
+  const { pr, prTitle = "", prBody = "", diff = "", keywords = [], repoPath = "" } = params;
 
-  const allText = [prTitle, prBody, ...prComments, diff].join("\n");
+  // Fetch PR comments from GitHub (issue comments + inline review comments)
+  const issueComments = pr ? await fetchPrComments(pr) : [];
+  const reviewComments = pr ? await fetchPrReviewComments(pr) : [];
+  const prCommentBodies = [...issueComments, ...reviewComments].map((c) => c.body);
+
+  const allText = [prTitle, prBody, ...prCommentBodies, diff].join("\n");
 
   // --- JIRA (direct) ---
   const jiraMatches = [...new Set([...allText.matchAll(TINKERPOP_JIRA_PATTERN)].map((m) => m[0]))];
@@ -227,6 +270,8 @@ export async function discoverDiscussions(params) {
     devListSearchKeywords: devListSearchPerformed ? keywords : [],
 
     secondary: secondaryDiscussions,
+
+    prComments: { issue: issueComments, review: reviewComments },
 
     proposals,
     proposalLinked: proposalLinks.length > 0,

@@ -244,14 +244,15 @@ export async function review(params) {
 
     const prKeywords = extractKeywords(changedFiles, prTitle.trim());
     const discussions = await discoverDiscussions({
+      pr,
       prTitle: prTitle.trim(),
       prBody: "",
-      prComments: [],
       diff: diffText,
       keywords: prKeywords,
       repoPath,
     });
     log(`  jiras: ${discussions.jiras.length} found${discussions.jiraMissing ? " (none referenced)" : ""}`);
+    log(`  pr comments: ${discussions.prComments.issue.length} issue + ${discussions.prComments.review.length} review`);
     log(`  dev list: ${discussions.devList.length} found${discussions.devListSearchPerformed ? ` (searched: ${prKeywords.join(", ")})` : ""}`);
     log(`  proposals: ${discussions.proposals.length} found`);
 
