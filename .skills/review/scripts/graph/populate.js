@@ -40,7 +40,7 @@ export async function populate(g, extraction) {
   const counts = {
     vertices: 0,
     edges: 0,
-    breakdown: { files: 0, functions: 0, types: 0, tests: 0, calls: 0, defines: 0, dependsOn: 0, testsEdges: 0 },
+    breakdown: { files: 0, functions: 0, types: 0, tests: 0, calls: 0, defines: 0, testsEdges: 0 },
   };
 
   for (const file of extraction.files) {
@@ -155,52 +155,16 @@ export async function populate(g, extraction) {
     }
   }
 
-  const importsByFile = new Map();
-  for (const imp of extraction.imports) {
-    if (!importsByFile.has(imp.filePath)) {
-      importsByFile.set(imp.filePath, new Set());
-    }
-    importsByFile.get(imp.filePath).add(imp.importedPath);
-  }
-
-  const filePaths = new Set(extraction.files.map((f) => f.path));
-
-  for (const [sourcePath, importedPaths] of importsByFile) {
-    for (const importedPath of importedPaths) {
-      const resolvedTarget = resolveImportTarget(importedPath, filePaths);
-      if (!resolvedTarget) continue;
-      if (resolvedTarget === sourcePath) continue;
-
-      batch.push(
-        g.V().hasLabel("File").has("path", sourcePath)
-          .addE("depends_on")
-          .to(__.V().hasLabel("File").has("path", resolvedTarget))
-      );
-      counts.edges++;
-      counts.breakdown.dependsOn++;
-
-      if (batch.length >= BATCH_SIZE) {
-        await submitBatch(batch);
-        batch = [];
-      }
-    }
-  }
+  // Import resolution (depends_on edges) is intentionally not implemented.
+  // File-to-file connectivity is already captured through the calls/defines edges
+  // (File A defines Function X which calls Function Y defined in File B). The
+  // depends_on edge would only add value for type-only references (imports used
+  // for signatures/fields but not method calls) which are less relevant for
+  // review purposes. Revisit if cluster analysis produces false disconnections.
 
   if (batch.length > 0) {
     await submitBatch(batch);
   }
 
   return counts;
-}
-
-function resolveImportTarget(importedPath, knownFilePaths) {
-  if (knownFilePaths.has(importedPath)) return importedPath;
-
-  for (const known of knownFilePaths) {
-    if (known.endsWith(importedPath)) return known;
-    const withoutExt = known.replace(/\.[^.]+$/, "");
-    if (withoutExt.endsWith(importedPath)) return known;
-  }
-
-  return null;
 }
