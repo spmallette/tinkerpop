@@ -19,9 +19,20 @@
 
 import gremlin from "gremlin";
 
+const INHERENTLY_CENTRAL = new Set([
+  "equals", "hashCode", "toString", "clone", "close", "compareTo",
+  "iterator", "hasNext", "next", "get", "set", "size", "isEmpty",
+  "contains", "add", "remove", "clear", "values", "entrySet", "keySet",
+  "finalize", "notify", "notifyAll", "wait",
+]);
+
 /**
  * Identify high-centrality functions — those with many incoming and outgoing
  * call edges. These are structural hotspots where changes propagate widely.
+ *
+ * Methods that are inherently central by nature (equals, toString, hashCode, etc.)
+ * are filtered out UNLESS they were modified in this PR — in which case they're
+ * highly relevant because many callers depend on their behavior.
  *
  * @param {object} g - gremlin-js GraphTraversalSource
  * @param {object} params
@@ -42,9 +53,12 @@ export async function highCentrality(g, params = {}) {
 
   const functions = await traversal.elementMap().toList();
   const results = [];
+  const filtered = [];
 
   for (const fnMap of functions) {
     const vertexId = fnMap.get(gremlin.process.t.id);
+    const name = fnMap.get("name");
+    const changed = fnMap.get("changed");
 
     const inDegree = await g.V(vertexId).inE("calls").count().next();
     const outDegree = await g.V(vertexId).outE("calls").count().next();
@@ -53,17 +67,25 @@ export async function highCentrality(g, params = {}) {
     const outCount = outDegree.value;
     const totalDegree = inCount + outCount;
 
-    if (totalDegree >= minDegree) {
-      results.push({
-        name: fnMap.get("name"),
-        filePath: fnMap.get("filePath"),
-        signature: fnMap.get("signature"),
-        linesStart: fnMap.get("lines_start"),
-        linesEnd: fnMap.get("lines_end"),
-        inDegree: inCount,
-        outDegree: outCount,
-        totalDegree,
-      });
+    if (totalDegree < minDegree) continue;
+
+    const entry = {
+      name,
+      filePath: fnMap.get("filePath"),
+      signature: fnMap.get("signature"),
+      linesStart: fnMap.get("lines_start"),
+      linesEnd: fnMap.get("lines_end"),
+      changed,
+      inDegree: inCount,
+      outDegree: outCount,
+      totalDegree,
+      inherentlyCentral: INHERENTLY_CENTRAL.has(name),
+    };
+
+    if (INHERENTLY_CENTRAL.has(name) && !changed) {
+      filtered.push(entry);
+    } else {
+      results.push(entry);
     }
   }
 
@@ -73,5 +95,6 @@ export async function highCentrality(g, params = {}) {
     hotspots: results.slice(0, topN),
     totalAnalyzed: functions.length,
     aboveThreshold: results.length,
+    filteredAsBoilerplate: filtered.length,
   };
 }

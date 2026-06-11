@@ -19,10 +19,20 @@
 
 import gremlin from "gremlin";
 
+const INHERENTLY_CENTRAL = new Set([
+  "equals", "hashCode", "toString", "clone", "close", "compareTo",
+  "iterator", "hasNext", "next", "get", "set", "size", "isEmpty",
+  "contains", "add", "remove", "clear", "values", "entrySet", "keySet",
+  "finalize", "notify", "notifyAll", "wait",
+]);
+
 /**
  * Calculate blast radius — how many functions are reachable downstream
  * from changed functions via call edges. High blast radius means a change
  * here affects many callers.
+ *
+ * Methods that are inherently central (equals, toString, etc.) are filtered
+ * out UNLESS they were modified in this PR.
  *
  * @param {object} g - gremlin-js GraphTraversalSource
  * @param {object} params
@@ -44,6 +54,10 @@ export async function blastRadius(g, params = {}) {
 
   for (const fnMap of functions) {
     const vertexId = fnMap.get(gremlin.process.t.id);
+    const name = fnMap.get("name");
+    const changed = fnMap.get("changed");
+
+    if (INHERENTLY_CENTRAL.has(name) && !changed) continue;
 
     const reachable = await g.V(vertexId)
       .repeat(gremlin.process.statics.in_("calls"))
@@ -56,11 +70,12 @@ export async function blastRadius(g, params = {}) {
     const count = reachable.value;
     if (count > 0) {
       results.push({
-        name: fnMap.get("name"),
+        name,
         filePath: fnMap.get("filePath"),
         signature: fnMap.get("signature"),
         linesStart: fnMap.get("lines_start"),
         linesEnd: fnMap.get("lines_end"),
+        changed,
         reachableCount: count,
         depth,
       });
