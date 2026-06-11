@@ -185,11 +185,18 @@ The subagent receives:
 - Test plan (what it decided to test and why)
 - Results (pass/fail for each test, with actual output)
 - Adversarial findings (edge cases it tried to break)
+- The exact test code it executed (Groovy scripts or traversals)
 
 **After the subagent completes:**
 - Stop the functional test Gremlin Server
 - Remove the build worktree
-- Include the subagent's results in the report as a "Functional Test" section
+- Include the subagent's results in the report:
+  - **In the main Functional Test section:** test plan summary, pass/fail grid,
+    key observations. Link to the appendix for details.
+  - **In the appendix (Functional Test Details):** full execution environment
+    description (build command, server config, connection URL, dataset used),
+    the actual test code that was executed (full Groovy scripts), and complete
+    output for each test so the reviewer can verify the results independently.
 
 ### 7. Synthesize and Render
 
