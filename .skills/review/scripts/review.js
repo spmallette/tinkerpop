@@ -30,6 +30,7 @@ import { completeness } from "./patterns/completeness.js";
 import { coverageGaps } from "./patterns/coverage-gaps.js";
 import { highCentrality } from "./patterns/centrality.js";
 import { blastRadius } from "./patterns/blast-radius.js";
+import { clusterAnalysis } from "./patterns/cluster-analysis.js";
 import { createPrDiscussion } from "./enrichment/api.js";
 import { discoverDiscussions } from "./discovery/discussions.js";
 
@@ -220,6 +221,8 @@ export async function review(params) {
 
     const connection = new gremlin.driver.DriverRemoteConnection(handle.url);
     const g = gremlin.process.traversal().withRemote(connection);
+    const aConnection = new gremlin.driver.DriverRemoteConnection(handle.url, { traversalSource: "a" });
+    const a = gremlin.process.traversal().withRemote(aConnection);
 
     log(`Phase 1: Extracting structure (${language})...`);
     const extraction = await extract(worktreePath, language, { changedFiles });
@@ -265,10 +268,12 @@ export async function review(params) {
     const coverageResult = await coverageGaps(g, { changedOnly: true });
     const centralityResult = await highCentrality(g, { changedOnly: true, topN: 10, minDegree: 3 });
     const blastResult = await blastRadius(g, { depth: 3, changedOnly: true });
+    const clusterResult = await clusterAnalysis(a, { changedOnly: true });
     log(`  completeness: ${completenessResults.filter(r => r.missing.length > 0).length} gaps found`);
     log(`  coverage_gaps: ${coverageResult.uncovered.length} functions without tests`);
     log(`  centrality: ${centralityResult.aboveThreshold} hotspots`);
     log(`  blast_radius: max ${blastResult.maxReachable} reachable`);
+    log(`  clusters: ${clusterResult.clusterCount} (${clusterResult.coherent ? "coherent" : "fragmented"})`);
 
     log(`Building guided walk...`);
     const guidedWalk = await buildGuidedWalk(extraction, centralityResult, blastResult, pr, worktreePath);
@@ -287,6 +292,7 @@ export async function review(params) {
         coverageGaps: coverageResult,
         centrality: centralityResult,
         blastRadius: blastResult,
+        clusters: clusterResult,
       },
       discussions,
       guidedWalk,
@@ -295,6 +301,7 @@ export async function review(params) {
     const jsonPath = outputPath.replace(/\.html$/, ".json");
     await writeFile(jsonPath, JSON.stringify(evidence, null, 2), "utf-8");
 
+    await aConnection.close();
     await connection.close();
     log(`Done. Evidence: ${jsonPath}`);
     return jsonPath;
