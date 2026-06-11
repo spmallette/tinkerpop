@@ -176,16 +176,39 @@ The subagent receives:
 - The PR title/description (what the change claims to do)
 - The specific doc content (extracted sections, not the whole file)
 - The specific test feature content (Gherkin scenarios showing expected behavior)
-- The Gremlin Server connection URL
-- Instructions: "Devise a test plan. Execute traversals against the server.
-  Try both expected use cases and adversarial edge cases. Report what works,
-  what fails, and what behaves unexpectedly."
+- The Gremlin Server connection URL and port
+- The path to the built assembly (for accessing GLV clients)
+- Instructions below
+
+**Test layer decision:**
+
+The subagent decides which test layers to execute and states its reasoning:
+
+Layer 1 (embedded) — when the PR changes traversal behavior, step logic,
+or core data structures. Tests correctness without network complexity.
+Execute via Gremlin Console with embedded TinkerGraph from the built assembly.
+
+Layer 2 (per-GLV over the wire) — when the change affects what crosses the wire.
+Connect from each relevant GLV client to the running Gremlin Server and test.
+  - All GLVs: if serialization formats, data types, or response structure changed
+  - Specific GLV only: if the PR is a GLV-specific change, or the bug was reported
+    through that GLV
+  - Skip: if the change is purely computational (same types in, same types out,
+    just different values — the wire format is unchanged)
+
+State your reasoning in the test plan. Not all layers need to execute for every PR.
+
+GLV clients are available in the build worktree:
+- Python: `gremlin-python/target/` (install via pip from built wheel)
+- JavaScript: `gremlin-javascript/` (npm link from built package)
+- Go: `gremlin-go/` (use built module directly)
+- .NET: `gremlin-dotnet/` (dotnet run from built project)
 
 **The subagent returns:**
-- Test plan (what it decided to test and why)
+- Test plan (what layers it chose, which GLVs, and why)
 - Results (pass/fail for each test, with actual output)
 - Adversarial findings (edge cases it tried to break)
-- The exact test code it executed (Groovy scripts or traversals)
+- The exact test code it executed (scripts per language)
 
 **After the subagent completes:**
 - Stop the functional test Gremlin Server
