@@ -136,25 +136,37 @@ structural evidence: graph stats, completeness results, coverage gaps, centralit
 hotspots, blast radius data, and code snippets per file.
 
 **Your job as the agent:** Read the JSON, read the playbook's **Interpret** section,
-and produce the HTML report. The report structure:
+read the actual source code in the worktree, and produce the HTML report.
+
+The report structure:
 
 **Main narrative (what the reviewer reads):**
-- **Summary** — one paragraph: what this PR does, what's important, confidence level
+- **Summary** — one paragraph: what this PR does and why. No verdict or recommendation —
+  that's the reviewer's job.
 - **Guided Walk** — the narrative tour. Lead the reviewer through the PR in priority
   order. For each key area: explain what it does, why it matters, what the reviewer
   should focus on, and what they can safely skip. Use the centrality/blast data to
   justify attention routing — don't just sort by numbers, explain the implications.
-- **Concerns & Open Questions** — things you couldn't verify, escape conditions triggered
-- **Verdict** — recommended action (approve/request changes/needs discussion)
+- **Findings** — concrete code review suggestions with code snippets. You have the
+  source code and the graph context (centrality, callers, coverage). Use them to
+  identify specific improvements: bugs, edge cases, inconsistencies, naming issues,
+  missing error handling, etc. For each finding:
+  - Show the relevant code snippet
+  - Explain the concern
+  - Suggest a fix (with code) when possible
+  - Note structural context (e.g., "this function has 604 callers — behavioral
+    change here has wide impact")
+- **Open Questions** — things you couldn't verify, escape conditions triggered,
+  areas where you lack context to make a judgment
+
+Do NOT include a "Verdict" or "Recommendation" section. The report provides
+evidence and suggestions — the human decides what to do with them.
 
 **Supporting data (appendix for drill-down):**
 - Structural Hotspots table (from centrality data)
 - Coverage Gaps table
 - Completeness results
 - Graph Statistics
-
-Use `render(evidence)` from `scripts/renderer/render.js` for the supporting sections,
-but write the Summary, Guided Walk, Concerns, and Verdict yourself as narrative HTML.
 
 Write the final HTML to `./pr-review-<pr>.html`.
 
