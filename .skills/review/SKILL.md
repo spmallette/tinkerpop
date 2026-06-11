@@ -129,7 +129,69 @@ const coverageResult = await coverageGaps(g, { changedOnly: true });
 
 Each playbook's Checks section specifies what to run. Collect all results.
 
-### 6. Synthesize and Render
+### 6. Functional Testing (subagent)
+
+Build the PR and run functional tests from a user's perspective.
+
+**Setup:**
+
+```bash
+# Create a SEPARATE worktree for the build (not the analysis worktree)
+git worktree add /tmp/pr-build-<pr> pr-review/<pr>
+cd /tmp/pr-build-<pr>
+mvn clean install -DskipTests
+```
+
+Start Gremlin Server from the built artifacts on a random port (different from
+the knowledge graph server):
+
+```bash
+# Find a free port
+PORT=<random unused port>
+# Start from the built assembly
+cd gremlin-server/target/apache-tinkerpop-gremlin-server-*-standalone
+bin/gremlin-server.sh conf/gremlin-server-min.yaml &
+```
+
+**Determine context for the subagent:**
+
+Based on the PR's domain and changed files, select:
+- Relevant documentation (e.g., `docs/src/reference/the-traversal.asciidoc` sections
+  about the affected step/feature)
+- Relevant test features (e.g., `gremlin-test/src/main/resources/.../Tree.feature`)
+- The PR title and description
+
+Do NOT give the subagent:
+- Source code of the implementation
+- The knowledge graph or Phase 1 JSON
+- The code review findings
+- Access to the analysis worktree
+
+**Spawn the subagent:**
+
+The subagent receives:
+- Its role: "You are testing this feature as a user. You only know what the
+  documentation says and what the test scenarios demonstrate. Do not read
+  implementation source code."
+- The PR title/description (what the change claims to do)
+- The specific doc content (extracted sections, not the whole file)
+- The specific test feature content (Gherkin scenarios showing expected behavior)
+- The Gremlin Server connection URL
+- Instructions: "Devise a test plan. Execute traversals against the server.
+  Try both expected use cases and adversarial edge cases. Report what works,
+  what fails, and what behaves unexpectedly."
+
+**The subagent returns:**
+- Test plan (what it decided to test and why)
+- Results (pass/fail for each test, with actual output)
+- Adversarial findings (edge cases it tried to break)
+
+**After the subagent completes:**
+- Stop the functional test Gremlin Server
+- Remove the build worktree
+- Include the subagent's results in the report as a "Functional Test" section
+
+### 7. Synthesize and Render
 
 The `review.js` script outputs a JSON file (`pr-review-<pr>.json`) containing all
 structural evidence: graph stats, completeness results, coverage gaps, centrality
@@ -156,6 +218,11 @@ The report structure:
   - Suggest a fix (with code) when possible
   - Note structural context (e.g., "this function has 604 callers — behavioral
     change here has wide impact")
+- **Functional Test** — the subagent's test plan and results. Show:
+  - What was tested and why (the test plan)
+  - What passed (builds confidence for the reviewer)
+  - What failed or behaved unexpectedly (specific issues with reproduction steps)
+  - Adversarial tests attempted (shows thoroughness)
 - **Open Questions** — things you couldn't verify, escape conditions triggered,
   areas where you lack context to make a judgment
 
@@ -168,16 +235,17 @@ evidence and suggestions — the human decides what to do with them.
 - Completeness results
 - Graph Statistics
 
-Write the final HTML to `./pr-review-<pr>.html`.
+Write the final HTML to `/tmp/pr-review-<pr>.html`.
 
-### 7. Cleanup
+### 8. Cleanup
 
 ```javascript
-await stopServer(handle);
+await stopServer(handle);  // knowledge graph server
 ```
 
 ```bash
 git worktree remove /tmp/pr-review-<pr>
+git worktree remove /tmp/pr-build-<pr>
 git branch -D pr-review/<pr>
 ```
 
@@ -194,7 +262,12 @@ Emit `[review]` lines between phases so the user sees progress:
 [review] Phase 2: Enriching (playbook: <domain>)...
 [review] Phase 2 complete: added <n> semantic edges
 [review] Phase 3: Running checks...
-[review] Done. Guidebook: ./pr-review-<n>.html
+[review] Phase 4: Building PR for functional testing...
+[review] Build complete. Starting test server on port <port>...
+[review] Spawning functional test subagent...
+[review] Functional testing complete: <n> passed, <n> failed, <n> adversarial
+[review] Synthesizing report...
+[review] Done. Report: /tmp/pr-review-<n>.html
 ```
 
 ## Important Notes
