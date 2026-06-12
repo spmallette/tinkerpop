@@ -5,8 +5,12 @@ maintain, and validate Apache TinkerPop's graph computing framework and its mult
 
 ## Primary Guidance: Agent Skills
 
-This repository provides development guidance as an [Agent Skill](https://agentskills.io) named
-`tinkerpop-dev`. If your tool supports Agent Skills, **activate that skill** for detailed,
+This repository provides [Agent Skills](https://agentskills.io):
+* 
+* `tinker-dev` - Project development guidance
+* `tinker-review` - Project-specific code review 
+
+If your tool supports Agent Skills, **activate that skill** for detailed,
 task-specific instructions covering build recipes, test evaluation, coding conventions, and
 reference material for each Gremlin Language Variant.
 

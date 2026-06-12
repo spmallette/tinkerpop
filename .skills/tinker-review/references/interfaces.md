@@ -126,15 +126,153 @@ interface EvidencePackage {
   meta: {
     pr: number;
     title: string;
-    domain: string;
+    domain: string;       // e.g., "glv", "driver-server", "glv, driver-server"
+    language: string;     // dominant language detected
+    filesChanged: number;
+    linesAdded: number;
+    linesDeleted: number;
     timestamp: string;
   };
-  summary: string;
   graphStats: PopulationSummary;
   checks: {
     completeness: CompletenessResult[];
     coverageGaps: CoverageGapResult;
+    centrality: CentralityResult;
+    blastRadius: BlastRadiusResult;
+    clusters: ClusterResult;
   };
+  discussions: DiscoveryResult;
+  guidedWalk: GuidedWalkSection[];
+}
+
+// === Narrative Input (agent-provided content for render()) ===
+//
+// All fields are plain data — no HTML markup.
+// render() converts them to deterministic HTML.
+
+interface NarrativeInput {
+  // 2–4 paragraph strings. Lead with what the PR does, not "This review...".
+  // Mention cluster coherence, highest-blast functions, any JIRA context.
+  summary?: string[];
+
+  // One entry per key changed file, ordered by impact (hotspots first).
+  // 'what' is prose: be concrete about what changed and why it matters.
+  // Set attention:true for high-centrality or high-blast files.
+  guidedWalk?: Array<{
+    filePath: string;
+    what: string;
+    attention?: boolean;
+    functions?: string[];  // names of key functions touched
+  }>;
+
+  // Summary of functional test plan and results.
+  functionalTest?: {
+    layers: string[];           // e.g. ["embedded"] or ["embedded", "python-glv"]
+    reasoning: string;          // why those layers were chosen
+    results: Array<{
+      scenario: string;
+      result: "pass" | "fail" | "skip";
+      note?: string;
+    }>;
+    observations?: string;      // adversarial findings / key takeaways
+  };
+
+  // One entry per concrete issue found.
+  // 'snippet' is verbatim code (plain text, not escaped).
+  findings?: Array<{
+    title: string;
+    filePath?: string;
+    snippet?: string;
+    concern: string;
+    fix?: string;
+    structuralContext?: string; // graph-derived context (callers, blast radius, etc.)
+  }>;
+
+  // One question per entry.
+  openQuestions?: string[];
+
+  // Full test execution details for the appendix.
+  appendixFunctional?: {
+    environment?: Record<string, string>;  // java, build, serverConfig, connectionUrl, dataset, …
+    tests: Array<{
+      name: string;
+      language: string;   // "groovy" | "python" | "javascript" | "go" | "csharp"
+      script: string;     // full script text
+      output: string;     // complete stdout/stderr
+    }>;
+  };
+}
+
+interface GuidedWalkSection {
+  filePath: string;
+  narrative: string;
+  functions: Array<{
+    name: string;
+    signature: string;
+    linesStart: number;
+    linesEnd: number;
+    isHotspot: boolean;
+    blastRadius: number;
+  }>;
+  snippet: string;          // up to 1500 chars of source
+  prLink: string;           // GitHub diff anchor URL
+  attention: boolean;       // true if contains hotspot functions
+  maxBlast: number;
+}
+
+interface CentralityResult {
+  hotspots: Array<{
+    name: string;
+    filePath: string;
+    signature: string;
+    linesStart: number;
+    linesEnd: number;
+    changed: boolean;
+    inDegree: number;
+    outDegree: number;
+    totalDegree: number;
+    inherentlyCentral: boolean;
+  }>;
+  totalAnalyzed: number;
+  aboveThreshold: number;
+  filteredAsBoilerplate: number;
+}
+
+interface BlastRadiusResult {
+  functions: Array<{
+    name: string;
+    filePath: string;
+    signature: string;
+    linesStart: number;
+    linesEnd: number;
+    changed: boolean;
+    reachableCount: number;
+    depth: number;
+  }>;
+  maxReachable: number;
+  totalWithCallers: number;
+  depth: number;
+}
+
+interface ClusterResult {
+  clusterCount: number;
+  coherent: boolean;         // true if clusterCount <= 1
+  clusters: Array<{ id: number; files: string[]; size: number }>;
+  totalFiles: number;
+}
+
+interface DiscoveryResult {
+  jiras: JiraEntry[];
+  jiraMissing: boolean;
+  devList: DevListEntry[];
+  devListMissing: boolean;
+  devListSearchPerformed: boolean;
+  devListSearchKeywords: string[];
+  secondary: Array<JiraEntry | DevListEntry>;
+  prComments: { issue: PrComment[]; review: PrComment[] };
+  proposals: ProposalEntry[];
+  proposalLinked: boolean;
+  proposalMissing: boolean;
 }
 ```
 
@@ -291,23 +429,26 @@ export async function coverageGaps(g, params = {}) {}
 /**
  * Render an evidence package to a self-contained HTML page.
  *
- * @param {EvidencePackage} evidence - Structured evidence data
+ * @param {EvidencePackage} evidence - Structured evidence from review.js
+ * @param {NarrativeInput} [narrative] - Agent-provided content (see NarrativeInput type)
  * @returns {string} - Complete HTML document as a string
  */
-export function render(evidence) {}
+export function render(evidence, narrative = {}) {}
 ```
 
 **Responsibilities:**
 - Produce a single self-contained HTML string (embedded CSS, no external deps)
-- Render header with PR metadata
-- Render completeness results as a visual checklist
-- Render coverage gaps as a list with file/line links
-- Render graph population summary
+- Auto-render all structural sections from evidence: context/discussions (with JIRA
+  comments), cluster SVG visualization, coverage gaps, centrality hotspots, blast
+  radius, completeness, graph stats, and file-by-file walk data
+- Render all `NarrativeInput` fields from structured data into deterministic HTML —
+  the agent never writes markup
+- Show empty-state placeholders for any omitted narrative fields
 
 **Does NOT:**
 - Fetch data or run queries
-- Produce graph visualizations (Phase 4)
-- Generate the guided walk narrative (needs agent synthesis)
+- Generate the narrative content (that's the agent's job)
+- Accept raw HTML in the narrative object
 
 ---
 
@@ -316,42 +457,40 @@ export function render(evidence) {}
 ```javascript
 /**
  * Execute a graph-based review of a PR.
- * This is the skill entry point.
+ * Runs the deterministic phases and outputs a JSON evidence file.
+ * The agent then reads that JSON, writes narrative sections, and calls render().
  *
  * @param {object} params
  * @param {number} params.pr - PR number
  * @param {string} params.repoPath - Path to the git repository
  * @param {object} [params.options]
- * @param {string} [params.options.outputPath] - Where to write the HTML (default: ./pr-review-${pr}.html)
- * @returns {Promise<string>} - Path to the generated HTML file
+ * @param {string} [params.options.outputPath] - Where to write the JSON (default: ./pr-review-${pr}.json)
+ * @param {string} [params.options.remote] - Git remote name (default: "upstream")
+ * @returns {Promise<string>} - Path to the generated JSON file
  */
 export async function review(params) {}
 ```
 
 **Orchestration steps:**
-1. `git fetch origin pull/${pr}/head:pr-review/${pr}`
+1. `git fetch ${remote} pull/${pr}/head:pr-review/${pr}`
 2. `git worktree add /tmp/pr-review-${pr} pr-review/${pr}`
 3. Determine changed files via `git diff --name-only ${base}...pr-review/${pr}`
-4. `startServer()`
-5. Connect gremlin-js to `handle.url`
+4. Classify domain (may be multiple: e.g., "glv, driver-server")
+5. `startServer()` — binds both `g` (standard) and `a` (OLAP/withComputer)
 6. `extract(worktreePath, language, { changedFiles })`
-7. `populate(g, extraction)`
-8. `completeness(g, { ... })`
-9. `coverageGaps(g, { ... })`
-10. Assemble `EvidencePackage`
-11. `render(evidence)` → write to file
-12. `stopServer(handle)`
-13. `git worktree remove ...` + `git branch -D ...`
+7. `populate(g, extraction)` + `createPrDiscussion(g, ...)`
+8. `discoverDiscussions(...)` — JIRA, PR comments, dev list, proposals
+9. `completeness()`, `coverageGaps()`, `highCentrality()`, `blastRadius()`, `clusterAnalysis()`
+10. `buildGuidedWalk(...)` — file-by-file sections sorted by attention/blast
+11. Assemble `EvidencePackage` → write JSON
+12. `stopServer(handle)` + cleanup worktree + branch
 
-**Progress output** (emitted to stdout between steps):
-```
-[review] PR #${pr} — fetching...
-[review] Starting Gremlin Server on port ${port}...
-[review] Phase 1: Extracting structure...
-[review] Phase 1 complete: ${vertices} vertices, ${edges} edges
-[review] Running checks...
-[review] Done. Guidebook: ${outputPath}
-```
+**The agent then:**
+1. Runs enrichment (Phase 2) — reads graph, writes semantic edges
+2. Spawns functional test subagent — runs embedded/GLV tests, collects results
+3. Reads the JSON output and source code in the worktree
+4. Assembles a `NarrativeInput` object (structured data, no HTML)
+5. Calls `render(evidence, narrative)` → writes HTML to `/tmp/pr-review-<pr>.html`
 
 ---
 
@@ -360,18 +499,24 @@ export async function review(params) {}
 ```
 INTERFACES.md (this file — defines contracts)
        │
-       ├──→ extraction/tree-sitter.js  ──┐
-       ├──→ infrastructure/docker.js   ──┤
-       ├──→ renderer/render.js           │
-       │                                 ▼
-       │                    graph/populate.js
-       │                                 │
-       │                                 ▼
-       │               patterns/completeness.js
-       │               patterns/coverage-gaps.js
-       │                                 │
-       └──→ review.js (orchestrator) ◄───┘
+       ├──→ extraction/tree-sitter.js     ──┐
+       ├──→ infrastructure/docker.js      ──┤
+       ├──→ discovery/discussions.js      ──┤
+       ├──→ enrichment/api.js (read+write)──┤
+       ├──→ renderer/render.js              │
+       │                                    ▼
+       │                       graph/populate.js
+       │                                    │
+       │                                    ▼
+       │            patterns/completeness.js
+       │            patterns/coverage-gaps.js
+       │            patterns/centrality.js
+       │            patterns/blast-radius.js
+       │            patterns/cluster-analysis.js
+       │            patterns/orphans.js
+       │                                    │
+       └──→ review.js (orchestrator) ◄──────┘
 ```
 
-Modules above the line can be implemented in parallel.
-Modules below the line depend on those above.
+Modules at the top can be implemented in parallel.
+`review.js` depends on all modules above it.

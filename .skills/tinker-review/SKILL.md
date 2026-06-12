@@ -1,5 +1,5 @@
 ---
-name: review
+name: tinker-review
 description: >
   Graph-based PR review for Apache TinkerPop. Builds a knowledge graph from
   PR source code, enriches it with semantic relationships guided by domain
@@ -17,11 +17,9 @@ metadata:
 ## Prerequisites
 
 - Docker running (for Gremlin Server)
-- `upstream` remote pointing to `git@github.com:apache/tinkerpop.git` (fetch only)
 - Node.js 20+ with dependencies installed in `.skills/review/`
 
-
-## References (load on demand)
+## References
 
 - Read [references/schema.md](references/schema.md) when you need to understand what vertices, edges, or properties exist in the knowledge graph (typically during enrichment or when writing raw Gremlin)
 - Read [references/interfaces.md](references/interfaces.md) when you need the exact function signatures or data type definitions for a module
@@ -32,29 +30,25 @@ When invoked with `/review <pr-number>`:
 
 ### 1. Setup
 
+Run the deterministic analysis pipeline. `review.js` handles fetching the PR ref,
+creating the worktree, and running all checks — do NOT do these steps manually first:
+
+```bash
+cd .skills/tinker-review
+node scripts/review.js <pr> <repo-path>
+# e.g.: node scripts/review.js 3448 /home/user/tinkerpop
+```
+
+This produces `/tmp/pr-review-<pr>.json` and leaves the worktree at `/tmp/pr-review-<pr>/`
+for you to read source files during enrichment. The imports below are available during
+enrichment (Phase 2) — you call them directly, not through review.js:
+
 ```javascript
-import { startServer, stopServer } from "./scripts/infrastructure/docker.js";
-import { extract } from "./scripts/extraction/tree-sitter.js";
-import { populate } from "./scripts/graph/populate.js";
-import { completeness } from "./scripts/patterns/completeness.js";
-import { coverageGaps } from "./scripts/patterns/coverage-gaps.js";
 import { render } from "./scripts/renderer/render.js";
 import {
   listFunctions, listTypes, getCallsFrom, getCanonicalSteps,
-  mapStep, linkDiscussion, annotate
+  mapStep, linkDiscussion, linkDoc, addGrammarRule, annotate
 } from "./scripts/enrichment/api.js";
-```
-
-Fetch the PR and create a worktree:
-```bash
-git fetch upstream pull/<pr>/head:pr-review/<pr>
-git worktree add /tmp/pr-review-<pr> pr-review/<pr>
-```
-
-Determine changed files:
-```bash
-BASE=$(git merge-base pr-review/<pr> upstream/master)
-git diff --name-only $BASE...pr-review/<pr>
 ```
 
 ### 2. Phase 1 — Extract and Populate (deterministic)
@@ -136,8 +130,10 @@ Build the PR and run functional tests from a user's perspective.
 **Setup:**
 
 ```bash
-# Create a SEPARATE worktree for the build (not the analysis worktree)
-git worktree add /tmp/pr-build-<pr> pr-review/<pr>
+# Git won't check out the same branch in two worktrees. Create a local branch
+# pointing to the same commit, then add a worktree for that branch.
+git branch pr-build/<pr> pr-review/<pr>
+git worktree add /tmp/pr-build-<pr> pr-build/<pr>
 cd /tmp/pr-build-<pr>
 mvn clean install -DskipTests
 ```
@@ -225,45 +221,39 @@ GLV clients are available in the build worktree:
 
 The `review.js` script outputs a JSON file (`pr-review-<pr>.json`) containing all
 structural evidence: graph stats, completeness results, coverage gaps, centrality
-hotspots, blast radius data, and code snippets per file.
+hotspots, blast radius data, cluster analysis, discussions, and code snippets per file.
 
 **Your job as the agent:** Read the JSON, read the playbook's **Interpret** section,
 read the actual source code in the worktree, and produce the HTML report.
 
-The report structure:
+Assemble a `NarrativeInput` object — **structured data, not HTML** — then call
+`render()` via stdin. `render()` converts it to deterministic HTML so every report
+looks identical in structure regardless of which agent wrote it.
 
-**Main narrative (what the reviewer reads):**
-- **Summary** — one paragraph: what this PR does and why. No verdict or recommendation —
-  that's the reviewer's job.
-- **Guided Walk** — the narrative tour. Lead the reviewer through the PR in priority
-  order. For each key area: explain what it does, why it matters, what the reviewer
-  should focus on, and what they can safely skip. Use the centrality/blast data to
-  justify attention routing — don't just sort by numbers, explain the implications.
-- **Findings** — concrete code review suggestions with code snippets. You have the
-  source code and the graph context (centrality, callers, coverage). Use them to
-  identify specific improvements: bugs, edge cases, inconsistencies, naming issues,
-  missing error handling, etc. For each finding:
-  - Show the relevant code snippet
-  - Explain the concern
-  - Suggest a fix (with code) when possible
-  - Note structural context (e.g., "this function has 604 callers — behavioral
-    change here has wide impact")
-- **Functional Test** — the subagent's test plan and results. Show:
-  - What was tested and why (the test plan)
-  - What passed (builds confidence for the reviewer)
-  - What failed or behaved unexpectedly (specific issues with reproduction steps)
-  - Adversarial tests attempted (shows thoroughness)
-- **Open Questions** — things you couldn't verify, escape conditions triggered,
-  areas where you lack context to make a judgment
+See [references/interfaces.md](references/interfaces.md) for the full `NarrativeInput`
+type definition and field-by-field guidance.
 
-Do NOT include a "Verdict" or "Recommendation" section. The report provides
-evidence and suggestions — the human decides what to do with them.
+```bash
+node --input-type=module << 'EOF'
+import { readFileSync, writeFileSync } from "node:fs";
+import { render } from "<repoPath>/.skills/tinker-review/scripts/renderer/render.js";
+const evidence = JSON.parse(readFileSync("/tmp/pr-review-<pr>.json", "utf-8"));
+const html = render(evidence, {
+  summary: ["What this PR does...", "What the graph reveals..."],
+  guidedWalk: [{ filePath: "...", what: "...", attention: true, functions: ["fn"] }],
+  functionalTest: { layers: ["embedded"], reasoning: "...", results: [{ scenario: "...", result: "pass" }] },
+  findings: [{ title: "...", filePath: "...", snippet: "...", concern: "...", fix: "..." }],
+  openQuestions: ["..."],
+  appendixFunctional: { environment: { java: "11" }, tests: [{ name: "...", language: "groovy", script: "...", output: "..." }] },
+});
+writeFileSync("/tmp/pr-review-<pr>.html", html);
+EOF
+```
 
-**Supporting data (appendix for drill-down):**
-- Structural Hotspots table (from centrality data)
-- Coverage Gaps table
-- Completeness results
-- Graph Statistics
+`render()` auto-renders all structural sections (context/discussions, cluster SVG,
+appendix with coverage gaps, centrality, blast radius, graph stats, file-by-file walk).
+
+Do NOT include a "Verdict" or "Recommendation" section — the human decides.
 
 Write the final HTML to `/tmp/pr-review-<pr>.html`.
 
@@ -277,6 +267,7 @@ await stopServer(handle);  // knowledge graph server
 git worktree remove /tmp/pr-review-<pr>
 git worktree remove /tmp/pr-build-<pr>
 git branch -D pr-review/<pr>
+git branch -D pr-build/<pr>
 ```
 
 ## Progress Output

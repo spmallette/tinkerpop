@@ -1,5 +1,5 @@
 ---
-name: tinkerpop-dev
+name: tinker-dev
 description: >
   Development guidance for the Apache TinkerPop monorepo. Use when building,
   testing, or contributing to TinkerPop's graph computing framework and its
@@ -10,7 +10,7 @@ description: >
 license: Apache-2.0
 compatibility: Requires Java 11+, Maven 3.5.3+, Docker. Individual GLVs may need Python, Node.js, .NET SDK, or Go.
 metadata:
-  version: 1.0.0
+  version: "1.0.0"
   project: Apache TinkerPop
 ---
 

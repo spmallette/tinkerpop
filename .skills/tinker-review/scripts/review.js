@@ -81,24 +81,45 @@ async function getChangedFiles(repoPath, prBranch, remote = "upstream") {
     "git", ["diff", "--name-only", `${base}...${prBranch}`],
     { cwd: repoPath }
   );
-  return diffOutput.trim().split("\n").filter(Boolean);
+  return { files: diffOutput.trim().split("\n").filter(Boolean), base };
+}
+
+async function getDiffStats(repoPath, base, prBranch) {
+  const { stdout } = await exec(
+    "git", ["diff", "--shortstat", `${base}...${prBranch}`],
+    { cwd: repoPath }
+  ).catch(() => ({ stdout: "" }));
+  const addMatch = stdout.match(/(\d+) insertion/);
+  const delMatch = stdout.match(/(\d+) deletion/);
+  return {
+    linesAdded: addMatch ? parseInt(addMatch[1], 10) : 0,
+    linesDeleted: delMatch ? parseInt(delMatch[1], 10) : 0,
+  };
 }
 
 async function classifyDomain(changedFiles) {
   const paths = changedFiles.join("\n").toLowerCase();
-  if (paths.includes("gremlin-dart") || paths.includes("gremlin-swift") || paths.includes("gremlin-rust")) {
-    return "glv";
+  const domains = new Set();
+
+  if (
+    paths.includes("gremlin-dart") || paths.includes("gremlin-swift") ||
+    paths.includes("gremlin-rust") || paths.includes("gremlin-go/") ||
+    paths.includes("gremlin-python/") || paths.includes("gremlin-dotnet/") ||
+    paths.includes("gremlin-js/")
+  ) {
+    domains.add("glv");
   }
-  if (paths.includes("gremlin-go/") || paths.includes("gremlin-python/") || paths.includes("gremlin-dotnet/")) {
-    return "glv";
+  if (paths.includes("gremlin-driver/") || paths.includes("gremlin-server/") || paths.includes("gremlin-util/")) {
+    domains.add("driver-server");
   }
   if (paths.includes("gremlin-language/") || paths.includes("grammar")) {
-    return "grammar";
+    domains.add("grammar");
   }
-  if (changedFiles.length <= 10) {
-    return "bug-fix";
+  if (domains.size === 0) {
+    domains.add(changedFiles.length <= 10 ? "bug-fix" : "general");
   }
-  return "general";
+
+  return [...domains].join(", ");
 }
 
 import { readFile } from "node:fs/promises";
@@ -190,12 +211,12 @@ async function buildGuidedWalk(extraction, centralityResult, blastResult, pr, wo
  * @param {number} params.pr - PR number
  * @param {string} params.repoPath - Path to the git repository
  * @param {object} [params.options]
- * @param {string} [params.options.outputPath] - Where to write the JSON (default: ./pr-review-${pr}.json)
+ * @param {string} [params.options.outputPath] - Where to write the JSON (default: /tmp/pr-review-${pr}.json)
  * @returns {Promise<string>} - Path to the generated JSON file
  */
 export async function review(params) {
   const { pr, repoPath, options = {} } = params;
-  const outputPath = options.outputPath || join(repoPath, `pr-review-${pr}.json`);
+  const outputPath = options.outputPath || `/tmp/pr-review-${pr}.json`;
   const prBranch = `pr-review/${pr}`;
   const worktreePath = `/tmp/pr-review-${pr}`;
 
@@ -203,14 +224,23 @@ export async function review(params) {
   let worktreeCreated = false;
 
   try {
-    log(`PR #${pr} — fetching...`);
     const remote = options.remote || "upstream";
-    await exec("git", ["fetch", remote, `pull/${pr}/head:${prBranch}`], { cwd: repoPath });
 
-    await exec("git", ["worktree", "add", worktreePath, prBranch], { cwd: repoPath });
-    worktreeCreated = true;
+    // Check whether the worktree is already in place (e.g. agent set it up manually).
+    const { stdout: worktreeList } = await exec("git", ["worktree", "list", "--porcelain"], { cwd: repoPath });
+    const worktreeExists = worktreeList.includes(worktreePath);
 
-    const changedFiles = await getChangedFiles(repoPath, prBranch, remote);
+    if (worktreeExists) {
+      log(`PR #${pr} — worktree already exists at ${worktreePath}, skipping fetch/add`);
+    } else {
+      log(`PR #${pr} — fetching...`);
+      await exec("git", ["fetch", remote, `pull/${pr}/head:${prBranch}`], { cwd: repoPath });
+      await exec("git", ["worktree", "add", worktreePath, prBranch], { cwd: repoPath });
+      worktreeCreated = true;
+    }
+
+    const { files: changedFiles, base } = await getChangedFiles(repoPath, prBranch, remote);
+    const diffStats = await getDiffStats(repoPath, base, prBranch);
     const language = detectLanguage(changedFiles);
     const domain = await classifyDomain(changedFiles);
     log(`PR #${pr} — classified as: ${domain} (${language}, ${changedFiles.length} files changed)`);
@@ -283,9 +313,12 @@ export async function review(params) {
         pr,
         title: prTitle.trim(),
         domain,
+        language,
+        filesChanged: changedFiles.length,
+        linesAdded: diffStats.linesAdded,
+        linesDeleted: diffStats.linesDeleted,
         timestamp: new Date().toISOString(),
       },
-      summary: `Graph-based structural analysis of PR #${pr}. Detected ${changedFiles.length} changed files in language: ${language}. Domain classification: ${domain}.`,
       graphStats,
       checks: {
         completeness: completenessResults,
