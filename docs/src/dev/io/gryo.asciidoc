@@ -49,6 +49,42 @@ to be compatible. Calls to `addCustom` will be applied first, prior to calls to 
 It is possible to disable registration by setting `registrationRequired` on the `GryoMapper.Builder` to `false`, but
 Gryo is less efficient with this feature is turned off.
 
+The following example demonstrates a complete round trip on the JVM. It builds a `GryoMapper` for a specific
+`GryoVersion` with registration disabled, writes the
+link:https://tinkerpop.apache.org/docs/x.y.z/data/#modern[Modern toy graph] to a file with a `GryoWriter`, then reads
+the file back into an empty graph with a `GryoReader`:
+
+[source,java]
+----
+import org.apache.tinkerpop.gremlin.structure.Graph;
+import org.apache.tinkerpop.gremlin.structure.io.gryo.GryoMapper;
+import org.apache.tinkerpop.gremlin.structure.io.gryo.GryoReader;
+import org.apache.tinkerpop.gremlin.structure.io.gryo.GryoVersion;
+import org.apache.tinkerpop.gremlin.structure.io.gryo.GryoWriter;
+import org.apache.tinkerpop.gremlin.tinkergraph.structure.TinkerFactory;
+import org.apache.tinkerpop.gremlin.tinkergraph.structure.TinkerGraph;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+
+final GryoMapper mapper = GryoMapper.build().version(GryoVersion.V1_0).registrationRequired(false).create();
+
+final Graph graph = TinkerFactory.createModern();
+final GryoWriter writer = GryoWriter.build().mapper(mapper).create();
+try (final FileOutputStream os = new FileOutputStream("tinkerpop-modern.kryo")) {
+    writer.writeGraph(os, graph);
+}
+
+final Graph readGraph = TinkerGraph.open();
+final GryoReader reader = GryoReader.build().mapper(mapper).create();
+try (final FileInputStream is = new FileInputStream("tinkerpop-modern.kryo")) {
+    reader.readGraph(is, readGraph);
+}
+----
+
+The same `GryoMapper` is supplied to both the `GryoWriter` and the `GryoReader` so that their registrations align. The
+`graph.io(IoCore.gryo())` builder offers an equivalent, more concise path to the same readers and writers when a
+`Graph` instance is already available.
+
 Until TinkerPop 3.3.0 there has only been one version of Gryo in 1.0 and the format for that version has generally
 expanded as new releases of TinkerPop have been produced. "Expansion" has generally meant that new types have come to
 be supported over time. The addition of new types means that while Gryo has remained at 1.0, older releases that
@@ -62,5 +98,5 @@ utilize the same version of TinkerPop on the client as on the server.
 IMPORTANT: As of 3.6.0, Gryo `MessageSerializer` implementations have been removed from the codebase.
 
 Both versions of Gryo support all the types defined by GraphSON as well as others that are bound more specifically
-to the JVM. The link:https://github.com/apache/tinkerpop/blob/x.y.z/gremlin-core/src/main/java/org/apache/tinkerpop/gremlin/structure/io/gryo/GryoVersion.java[GryoVersion]
+to the JVM. The link:https://github.com/apache/tinkerpop/blob/master/gremlin-core/src/main/java/org/apache/tinkerpop/gremlin/structure/io/gryo/GryoVersion.java[GryoVersion]
 class contains a listing of all the default registered classes.
