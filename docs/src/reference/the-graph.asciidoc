@@ -108,6 +108,28 @@ variances covered in this section are:
 * Null property values (*nullable properties*): a property value of `null` can be stored rather than triggering
 removal of the property.
 
+Each variance is discoverable at runtime by querying the graph's <<features,`Feature`>> set. The example below
+checks all four against an in-memory `TinkerGraph`. Any other provider's `Graph` instance reports its own support
+in the same way. Three of these accessors return a `boolean`, while multi-label support is reported as a
+`LabelCardinality` enum rather than a `supportsXxx` flag:
+
+[gremlin-groovy]
+----
+graph = TinkerGraph.open()
+graph.features().vertex().supportsMultiProperties()    <1>
+graph.features().vertex().supportsMetaProperties()     <2>
+graph.features().vertex().getLabelCardinality()        <3>
+graph.features().vertex().supportsNullPropertyValues() <4>
+----
+
+<1> Whether a vertex property key can hold multiple values (multi-properties).
+<2> Whether a vertex property can itself carry properties (meta-properties).
+<3> The vertex label cardinality (multi-label), returned as a `LabelCardinality` enum rather than a boolean.
+<4> Whether an explicit `null` can be stored as a property value (nullable properties).
+
+Analogous accessors exist on `graph.features().edge()` for the variances that also apply to edges. Each variance
+subsection below names the specific accessor to use.
+
 [[vertex-properties]]
 === Vertex Properties
 
@@ -115,7 +137,9 @@ image:vertex-properties.png[width=215,float=left] TinkerPop introduces the conce
 properties of a `Vertex` are a `VertexProperty`. A `VertexProperty` implements `Property` and as such, it has a
 key/value pair. However, `VertexProperty` also implements `Element` and thus, can have a collection of key/value
 pairs. Moreover, while an `Edge` can only have one property of key "name" (for example), a `Vertex` can have multiple
-"name" properties. This is what enables the multi-properties and meta-properties variances introduced above.
+"name" properties. This is what enables the multi-properties and meta-properties variances introduced above. A
+provider reports support for these at runtime through `graph.features().vertex().supportsMultiProperties()` and
+`graph.features().vertex().supportsMetaProperties()` respectively.
 
 Possible use cases for meta-properties:
 
@@ -209,6 +233,9 @@ configured `LabelCardinality`:
 * `ONE` fixes exactly one immutable label per vertex
 * `ONE_OR_MORE` requires at least one label but permits additional labels to be added or removed
 * `ZERO_OR_MORE` allows a vertex to have any number of labels including none
+
+The configured cardinality can be discovered at runtime via `graph.features().vertex().getLabelCardinality()`,
+which returns one of the `LabelCardinality` enum values above rather than a `supportsXxx` boolean.
 
 It is up to each graph provider to decide which of these cardinalities it supports and, where more than one is
 supported, what its default is or whether the choice is left to the user to configure. See the
