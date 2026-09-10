@@ -4445,6 +4445,7 @@ IMPORTANT: The `peerPressure()`-step is a `VertexComputing`-step and as such, ca
 
 [gremlin-groovy,modern]
 ----
+graph = TinkerFactory.createModern()
 g = traversal().with(graph).withComputer()
 g.V().peerPressure().with(PeerPressure.propertyName, 'cluster').values('cluster')
 g.V().hasLabel('person').
