@@ -451,6 +451,46 @@ type, we use the type's native equality and ordering operations (if defined) to 
 If the unknown arguments are of different types or do not define a natural order, we order first by type identity,
 then by canonical string representation.
 
+[[gremlin-semantics-verifying-orderability]]
+==== Verifying Orderability
+
+The type space above is defined in terms of the abstract GType enum rather than host-language classes, so the
+expression that produces a value of a given type is not always obvious. In particular, the `DATETIME` type space is
+produced by the `datetime()` function. A `java.util.Date` or `java.time.Instant` handed directly to a traversal from the
+host language is treated as an `Unknown` type and orders in position 15 rather than position 4.
+
+The following example injects one value drawn from several type spaces as separate traversers, including both `NaN` and
+`+Infinity`, and sorts the stream with `order()`. The emitted sequence follows the type-space priority list, with `NaN`
+ordered after `+Infinity` within the numeric type space and the nested list ordered last.
+
+[gremlin-groovy,modern]
+----
+g.inject(null, true, 1, 2.5d, Double.POSITIVE_INFINITY, Double.NaN, datetime('2023-01-01T00:00:00Z'), "orderability", UUID.fromString("b46d37e9-755c-477e-9ab6-44aabea51d50"), [1, 2]).order()
+----
+
+The table below maps a common Groovy or Java expression to the type space its value occupies. Provider implementers can
+use it to construct a test value for each priority position.
+
+[%header]
+|===
+|Priority|Type space|Example expression
+|1|`NULL`|`null`
+|2|`BOOLEAN`|`true`
+|3|`NUMBER`|`1`, `2.5d`, `Double.POSITIVE_INFINITY`, `Double.NaN`
+|4|`DATETIME`|`datetime('2023-01-01T00:00:00Z')`
+|5|`STRING`|`"orderability"`
+|6|`UUID`|`UUID.fromString("b46d37e9-755c-477e-9ab6-44aabea51d50")`
+|7|`Vertex`|`g.V().next()`
+|8|`Edge`|`g.E().next()`
+|9|`VertexProperty`|`g.V().properties().next()`
+|10|`Property`|`g.E().properties().next()`
+|11|`Path`|`g.V().path().next()`
+|12|`Set`|`[1, 2] as Set`
+|13|`List`|`[1, 2]`
+|14|`Map`|`[key: 1]`
+|15|`Unknown`|`new java.util.Date()`, `java.time.Instant.now()`
+|===
+
 [[gremlin-semantics-equivalence]]
 === Equivalence
 
