@@ -475,6 +475,21 @@ always considered to be non-equivalent.
 * `NaN` Equivalence is the reverse of Equality: `NaN` is equivalent to `NaN` and not
 Equivalent to any other `NUMBER`.
 
+Both differences can be observed directly through `dedup()`, which retains one representative of each equivalence
+class. An `INT` and a `FLOAT` that share the same numeric value are non-equivalent under Equivalence, so both survive
+deduplication, whereas under Equality they would be treated as equal. `NaN`, by contrast, is equivalent only to itself,
+so repeated `NaN` values collapse to one while `NaN` remains distinct from every other `NUMBER`.
+
+[gremlin-groovy,modern]
+----
+g.inject(2, 2.0f).dedup()
+g.inject(Double.NaN, Double.NaN).dedup()
+g.inject(Double.NaN, 1.0d).dedup()
+----
+
+The literals above map the type-annotated notation used in the rules to values a traversal can construct directly: `2`
+is an `INT`, `2.0f` a `FLOAT`, `2.0d` (or `1.0d`) a `DOUBLE`, and `2L` a `LONG`.
+
 === Further Reference
 
 ==== Mapping for P
