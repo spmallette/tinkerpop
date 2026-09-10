@@ -4813,7 +4813,21 @@ link:++https://tinkerpop.apache.org/javadocs/x.y.z/core/org/apache/tinkerpop/gre
 
 The `read()`-step is not really a "step" but a step modulator in that it modifies the functionality of the `io()`-step.
 More specifically, it tells the `io()`-step that it is expected to use its configuration to read data from some
-location. Please see the <<io-step,documentation>> for `io()`-step for more complete details on usage.
+location. The location passed to `io()` is a file path whose extension determines the serialization format, where
+`.kryo` selects <<gryo,Gryo>>, `.json` selects <<graphson,GraphSON>>, and `.xml` selects <<graphml,GraphML>>. The
+`read()` modulator is inert on its own, so no data is loaded until a terminal step such as `iterate()` triggers
+execution of the traversal.
+
+[gremlin-groovy]
+----
+graph = TinkerGraph.open()
+g = traversal().with(graph)
+g.io('data/tinkerpop-modern.kryo').read().iterate()
+g.V().count()
+----
+
+The <<io-step,`io()`-step>> documentation provides more complete details on usage, including how the `with()`
+modulator overrides the format detection described above.
 
 *Additional References*
 
@@ -6329,7 +6343,18 @@ The term `with` is a reserved word in Python, and therefore must be referred to 
 
 The `write()`-step is not really a "step" but a step modulator in that it modifies the functionality of the `io()`-step.
 More specifically, it tells the `io()`-step that it is expected to use its configuration to write data to some
-location. Please see the <<io-step,documentation>> for `io()`-step for more complete details on usage.
+location. The location passed to `io()` is a file path whose extension determines the serialization format, where
+`.kryo` selects <<gryo,Gryo>>, `.json` selects <<graphson,GraphSON>>, and `.xml` selects <<graphml,GraphML>>. The
+`write()` modulator is inert on its own, so nothing is persisted until a terminal step such as `iterate()` triggers
+execution of the traversal.
+
+[gremlin-groovy,modern]
+----
+g.io('/tmp/tinkerpop-modern.json').write().iterate()
+----
+
+The <<io-step,`io()`-step>> documentation provides more complete details on usage, including how the `with()`
+modulator overrides the format detection described above.
 
 *Additional References*
 
