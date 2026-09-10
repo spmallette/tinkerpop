@@ -2000,7 +2000,9 @@ None
 * For multi-valued properties (list/set cardinality), `has(key, value)` passes if *any* property with that key matches.
 * When a `Traversal` is supplied as a value or inside a `P`, it is resolved per-traverser and its first result is used.
 * Child traversals must be read-only. Mutating steps are rejected with an `Argument Error`.
-* `has(key, null)` filters to elements where the property value is `null` (not an existence check).
+* `has(key, null)` filters to elements where the property value is `null` rather than performing an existence
+  check. Such a match is only possible on a graph that permits storing `null` property values. On a graph that does
+  not, no property is created for a `null` value and the filter yields no results.
 * `has(null)` and `has(null, value)` always produce an empty result.
 
 *Exceptions:*
