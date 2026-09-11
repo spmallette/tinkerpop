@@ -7407,15 +7407,32 @@ g.WithStrategies(new SubgraphStrategy(vertexProperties: HasNot("endTime")));
 ----
 [source,javascript]
 ----
-g.withStrategies(new SubgraphStrategy(vertexProperties: hasNot("endTime")));
+g.withStrategies(new SubgraphStrategy({vertexProperties: hasNot("endTime")}));
 ----
 [source,python]
 ----
-g.withStrategies(new SubgraphStrategy(vertexProperties=hasNot("endTime")))
+g.with_strategies(SubgraphStrategy(vertex_properties=hasNot("endTime")))
 ----
 
 IMPORTANT: This strategy is implemented such that the vertices attached to an `Edge` must both satisfy the vertex
 criterion (if present) in order for the `Edge` to be considered a part of the subgraph.
+
+To make this rule observable, the complete set of "develops" edges in the "TinkerPop Crew" toy graph can first be
+inspected without any strategy in effect.
+
+[gremlin-groovy]
+----
+graph = TinkerFactory.createTheCrew()
+g = traversal().with(graph)
+g.E().hasLabel('develops').elementMap()
+----
+
+The graph contains five such edges, two of which originate from the person "stephen", who has lived in only three
+places. When a subgraph requires people to have lived in more than three places, "stephen" no longer satisfies the
+vertex criterion, and because both endpoints of an edge must satisfy that criterion, both "develops" edges attached
+to "stephen" fall outside the subgraph even though the software vertices at their other end still qualify. The
+example below applies exactly that constraint, leaving only the three "develops" edges whose endpoints all satisfy
+the criterion.
 
 The example below uses all three filters: vertex, edge, and vertex property. People vertices must have lived in more
 than three places, edges must be labeled "develops," and vertex properties must be the persons current location or a
