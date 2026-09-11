@@ -545,7 +545,8 @@ pattern from a neighboring entry rather than introducing a new structure.
 
 The `addE()` step can be used as both a start step and a mid-traversal step. When used as a start step, both `from()`
 and `to()` must be specified. When used as a mid-traversal step, the current traverser becomes the source vertex and
-only `to()` needs to be specified.
+only `to()` needs to be specified. Unlike `addV()`, a `null` edge label does not raise an error: when the `edgeLabel`
+argument is `null`, the default edge label `edge` is used.
 
 The gremlin-lang grammar only permits `Traversal` and `STRING` (alias for `__.select(String)`) arguments in `from()` and
 `to()`. The `Traversal` must either produce a `Vertex` which is attachable to the graph, or it must produce the id of an
@@ -553,9 +554,22 @@ existing `Vertex` in the graph. `GraphTraversal` implementations in GLVs may opt
 `to(Vertex)` as syntactic sugar. If translating to gremlin-lang scripts, these sugared modulators must be converted to
 `from(__.V(vertex.id()))` or `from(__.constant(vertex.id()))` (and equivalents for `to()`).
 
+The example below adds one edge using the mid-traversal form and one using the start-step form:
+
+[gremlin-groovy,modern]
+----
+g.V(1).addE('knows').to(__.V(2))             <1>
+g.addE('created').from(__.V(1)).to(__.V(3))  <2>
+----
+
+<1> As a mid-traversal step, the incoming vertex becomes the source of the edge and only `to()` is required.
+<2> As a start step, both `from()` and `to()` must be supplied.
+
 *Exceptions:*
 
-* If the edge label is null, an `Argument Error` is raised.
+* If a label-producing `Traversal` yields `null`, an `Argument Error` is raised.
+* If a `from()` or `to()` argument does not resolve to a `Vertex` or to the id of an existing `Vertex` in the graph, a
+`State Error` is raised.
 
 See: link:https://github.com/apache/tinkerpop/tree/x.y.z/gremlin-core/src/main/java/org/apache/tinkerpop/gremlin/process/traversal/step/map/AddEdgeStep.java[source],
 link:https://github.com/apache/tinkerpop/tree/x.y.z/gremlin-core/src/main/java/org/apache/tinkerpop/gremlin/process/traversal/step/map/AddEdgeStartStep.java[source (start)],
