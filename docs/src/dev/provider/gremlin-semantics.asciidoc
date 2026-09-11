@@ -1309,7 +1309,9 @@ it may be sensible to group traversers by Map in the case where multiple paramet
 
 The no-arg version of the `call()` API is meant to be a directory service and should only be used to start a traversal.
 The reference implementation provides a default version, which will produce a list of service names or a service
-description if run with `verbose=true`. Providers using their own implementation of the call operation must provide their
+description if run with `verbose=true`. This directory reports only the services a provider has registered, so a graph
+with no registered services returns an empty result from `call()` and `call("--list")`. A named service must be
+registered before it can be invoked. Providers using their own implementation of the call operation must provide their
 own directory listing service with the service name `"--list"`.
 
 *Exceptions:*
