@@ -890,18 +890,18 @@ If the incoming traverser type is unsupported, a string that (after trimming lea
 See: link:https://github.com/apache/tinkerpop/tree/x.y.z/gremlin-core/src/main/java/org/apache/tinkerpop/gremlin/process/traversal/step/map/AsBoolStep.java[source],
 link:https://tinkerpop.apache.org/docs/x.y.z/reference/#asBool-step[reference]
 
-[llms-summary="The formal semantics of the asDate() step: parse the value of incoming traverser as date."]
+[llms-summary="The formal semantics of the asDate() step: parse the value of the incoming traverser as a DATETIME."]
 [[asDate-step]]
 === asDate()
 
-*Description:* Parse the value of incoming traverser as date. Supported ISO-8601 strings and Unix time numbers.
+*Description:* Parse the value of the incoming traverser as a datetime, returning a `DATETIME`. ISO-8601 strings and Unix time numbers are supported.
 
 *Syntax:* `asDate()`
 
 [width="100%",options="header"]
 |=========================================================
 |Start Step |Mid Step |Modulated |Domain |Range
-|N |Y |N |`any` |`any`
+|N |Y |N |`STRING`/`NUMBER`/`DATETIME` |`DATETIME`
 |=========================================================
 
 *Arguments:*
@@ -914,11 +914,11 @@ None
 
 *Considerations:*
 
-Incoming date remains unchanged.
+A `STRING` is parsed as an ISO-8601 datetime. A `NUMBER` is interpreted as Unix time, that is, the number of milliseconds elapsed since the epoch (1970-01-01T00:00:00Z). A value that is already a `DATETIME` is returned unchanged.
 
 *Exceptions:*
 
-* If the incoming traverser is a non-`STRING`/`NUMBER`/`DATETIME` value then an `Argument Error` is raised.
+* An `Argument Error` is raised if the incoming traverser is `null`, is a value whose type is not `STRING`, `NUMBER`, or `DATETIME`, is a string that cannot be parsed as an ISO-8601 datetime, or is a number too large to represent as Unix time.
 
 See: link:https://github.com/apache/tinkerpop/tree/x.y.z/gremlin-core/src/main/java/org/apache/tinkerpop/gremlin/process/traversal/step/map/AsDateStep.java[source],
 link:https://tinkerpop.apache.org/docs/x.y.z/reference/#asDate-step[reference]
