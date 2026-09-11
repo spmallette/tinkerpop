@@ -4513,6 +4513,29 @@ into a single traverser. That new traverser has a `Traverser.bulk()` that is the
 bulks. On the other hand, the `Count` represents the sum of all `Traverser.bulk()` results and thus, expresses the
 number of "represented" (not enumerated) traversers. `Traversers` will always be less than or equal to `Count`.
 
+[[accessing-traversalmetrics]]
+==== Accessing TraversalMetrics
+
+The table shown above is the string representation of the `TraversalMetrics` object, which is also available as data
+for programmatic inspection. Terminating the traversal with `next()` returns the `TraversalMetrics` directly, exposing
+the total duration through `getDuration(TimeUnit)` and the per-step `Metrics` through `getMetrics()`:
+
+[gremlin-groovy,modern]
+----
+import java.util.concurrent.TimeUnit
+m = g.V().out('created').repeat(both()).times(3).hasLabel('person').values('age').sum().profile().next()
+m.getDuration(TimeUnit.MICROSECONDS)
+m.getMetrics(0)
+----
+
+Passing a key to `profile(String)` stores the same `TraversalMetrics` as a keyed sideEffect, which a later
+<<cap-step,`cap()`>>-step can retrieve to continue the traversal after the measured segment:
+
+[gremlin-groovy,modern]
+----
+g.V().out('created').repeat(both()).times(3).hasLabel('person').values('age').sum().profile('m').cap('m')
+----
+
 For traversal compilation information, please see <<explain-step,`explain()`>>-step.
 
 *Additional References*
