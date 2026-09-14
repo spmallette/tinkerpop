@@ -163,6 +163,8 @@ MapReduce jobs are executed is irrelevant. This is made apparent when realizing 
 `Vertex` as its input and the `reduce()`-stage yields key/value pairs. Thus, the results of reduce can not fed back
 into a `map()`.
 
+[[collection-of-vertexprograms]]
+[llms-summary="The VertexPrograms that ship with TinkerPop for OLAP analytics: PageRank, PeerPressure, ConnectedComponent, ShortestPath, CloneVertexProgram, and the TraversalVertexProgram that compiles Gremlin OLAP traversals, along with the OLTP/OLAP differences to be aware of."]
 == A Collection of VertexPrograms
 
 TinkerPop provides a collection of VertexPrograms that implement common algorithms. This section discusses the various
@@ -617,6 +619,33 @@ the final step), `TraversalVertexProgram` ensures a serial representation is ord
 to maintain the ordering of `g.V().hasLabel("person").order().by("age").values("name")`. However, the OLAP traversal
 `g.V().hasLabel("person").order().by("age").out().values("name")` will lose the original ordering as the `out()`-step
 will rebroadcast traversers across the cluster.
+
+The behavior described above can be observed against the toy "modern" graph. Adding `withComputer()` to the
+traversal source activates OLAP mode (see <<traversalvertexprogram,`TraversalVertexProgram`>>). When `order()`
+is the final step, the results are returned in the expected order:
+
+[gremlin-groovy,modern]
+----
+g = traversal().with(graph).withComputer()
+g.V().hasLabel('person').order().by('age').values('name')
+----
+
+Appending an `out()`-step after the `order()`-step rebroadcasts the traversers across the `GraphComputer`
+workers, so the original ordering is not retained:
+
+[source,groovy]
+----
+g.V().hasLabel('person').order().by('age').out().values('name')
+==>lop
+==>ripple
+==>vadas
+==>lop
+==>josh
+==>lop
+----
+
+NOTE: The output above is illustrative. The exact ordering produced after the `out()`-step is non-deterministic
+and can vary across `GraphComputer` workers and from one run to the next.
 
 [[graph-filter]]
 == Graph Filter
