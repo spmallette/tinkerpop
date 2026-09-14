@@ -235,7 +235,8 @@ Numbers are compared using type promotion, described above. As such, `1 == 1.0`.
 
 Edge cases:
 
-* `-0.0 == 0.0 == +0.0`
+* `-0.0 < 0.0 == +0.0`, i.e. negative zero is a distinct value that is strictly less than positive zero and
+therefore not <<Equality,Equal>> to it. This holds for both 32-bit and 64-bit floats.
 * `+INF == +INF`,  `-INF == -INF`,  `-INF != +INF`
 ** `±Infinity` follows the same type promotion rules for both 32-bit and 64-bit floats.
 * As described above `NaN` is not <<Equality,Equal>> and not <<Comparability,Comparable>> to any Number (including itself).
