@@ -102,6 +102,21 @@ link:https://tinkerpop.apache.org/docs/x.y.z/data/#modern[Modern toy graph] in G
 </graphml>
 ----
 
+A `Graph` is written to GraphML through the `io()`-step. The `io()`-step configures the operation and the
+follow-on `write()` step performs the serialization, while the terminating `iterate()` executes the traversal.
+The `IO.writer` option selects the GraphML format explicitly, though the `io()`-step can also infer it from a
+`.xml` file name extension:
+
+[source,java]
+----
+g.io("tinkerpop-modern.xml").
+    with(IO.writer, IO.graphml).
+  write().iterate()
+----
+
+Further detail on the `io()`-step and its options is available in the
+link:https://tinkerpop.apache.org/docs/x.y.z/reference/#io-step[Reference Documentation].
+
 Consider the following points when reading a GraphML file to TinkerPop that was generated outside of TinkerPop:
 
 * Supports the following values in `attr.type`:
@@ -119,3 +134,13 @@ supports user-supplied identifiers (i.e. TinkerGraph).
 * By default the labels for vertex and edges are referred to as "labelV" and "labelE" respectively. It is possible to
 change these defaults on the `Builder` for the `GraphReader`. If no label is supplied, the reader will default to
 "vertex" and "edge" respectively as is the general expectation in TinkerPop when those values are omitted.
+
+A GraphML file is read into a `Graph` in the same way, with the follow-on `read()` step in place of `write()` and
+the `IO.reader` option selecting the GraphML format:
+
+[source,java]
+----
+g.io("tinkerpop-modern.xml").
+    with(IO.reader, IO.graphml).
+  read().iterate()
+----
