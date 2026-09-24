@@ -1049,7 +1049,9 @@ link:https://tinkerpop.apache.org/docs/x.y.z/reference/#asString-step[reference]
 
 *Arguments:*
 
-* `maxBarrierSize` - The maximum number of traversers that can be held in the barrier before being processed.
+* `maxBarrierSize` - The maximum number of traversers that can be held in the barrier before being processed. It is
+expected to be a positive integer (`1` or greater). When the argument is omitted, the barrier is unbounded and holds
+the entire traverser stream before releasing it.
 
 *Modulation:*
 
@@ -1061,6 +1063,10 @@ The `barrier()` step is useful in the following situations:
 * When everything prior to `barrier()` needs to be executed before moving onto the steps after the `barrier()` (i.e., ordering).
 * When "stalling" the traversal may lead to a "bulking optimization" in traversals that repeatedly touch many of the
 same elements (i.e., optimizing).
+
+The `maxBarrierSize` argument is not validated against its expected range. A value of zero or less is accepted without
+raising an error, but the barrier then never fills and releases no traversers, so the traversal downstream of the step
+produces no results. A positive value is therefore required for the step to emit anything.
 
 *Exceptions:*
 
