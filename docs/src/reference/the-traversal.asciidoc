@@ -5295,8 +5295,20 @@ g.V().as('a').out('created').in('created').as('b').
 for the sake of a running example.
 <2> The `select().by('name')` projects each binding vertex to their name property value and `where()` operates to
 ensure respective `a` and `b` strings are not the same.
-<3> The first `select()` projects a vertex binding set. A binding is filtered if `a` vertex equals `b` vertex. A
-binding is filtered if `a` doesn't know `b`. The second and final `select()` projects the name of the vertices.
+<3> The first `select()` projects a vertex binding set. A binding is filtered when the `a` vertex equals the `b`
+vertex, and again when `a` does not know `b`. For the modern graph the first filter is redundant, as no person
+knows themselves and so the `knows` filter alone already excludes every equal-vertex binding, leaving only the
+pairing of `marko` with `josh`. The second and final `select()` projects the name of the vertices.
+
+The `where('a',neq('b'))` filter compares whatever value each binding currently holds at the point the filter
+runs, so the projection order matters. In the second traversal the `by('name')` projection is applied before
+`where()`, which makes `neq` compare the `name` strings bound to `a` and `b`. In the third traversal the
+projection is deferred to the final `select()`, so `where()` compares the vertices themselves. The two traversals
+agree only because every person in the modern graph has a distinct `name`, which is what makes vertex inequality
+and name inequality coincide. The bindings arise from the `created` edges of the modern graph, where `marko`,
+`josh`, and `peter` all created `lop` and `josh` also created `ripple`, joined in the third traversal by the
+`marko` `knows` `josh` edge. The reported rows are therefore observed results for this particular graph rather
+than values a reader can predict from the traversal alone.
 
 *Additional References*
 
