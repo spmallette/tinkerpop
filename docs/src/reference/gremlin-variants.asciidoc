@@ -1097,6 +1097,63 @@ import static org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.__.*;
 [[gremlin-java-configuration]]
 === Configuration
 
+The `Cluster` holds the driver configuration and can be built from an Apache Commons `Configuration` object or
+from a YAML file. The key names in the table below are the names read from a `Configuration` object, which is
+also how the entries of a Java properties file are interpreted. Such a `Configuration` is passed to
+`Cluster.open(Configuration)`:
+
+[source,text]
+----
+hosts=localhost
+port=8182
+connectionPool.enableSsl=true
+connectionPool.connectTimeoutMillis=5000
+connectionPool.maxConnections=256
+auth.type=basic
+auth.username=stephen
+auth.password=password
+----
+
+[source,java]
+----
+Configuration conf = new Configurations().properties("conf/driver.properties");
+Cluster cluster = Cluster.open(conf);
+Client client = cluster.connect();
+GraphTraversalSource g = traversal().with(DriverRemoteConnection.using(client, "g"));
+----
+
+The same settings can be expressed in a YAML file, which is supplied to `Cluster.open(String)` as the path to
+that file:
+
+[source,java]
+----
+Cluster cluster = Cluster.open("conf/remote.yaml");
+----
+
+A YAML configuration is deserialized field by field rather than by the dotted key names, so a few of its keys
+differ from those in the table. The connection pool timeout fields are named `connectTimeout`, `idleTimeout`,
+`keepAliveTime` and `readTimeout`, without the `Millis` suffix that the `Configuration` names carry:
+
+[source,yaml]
+----
+hosts: [localhost]
+port: 8182
+connectionPool: {
+  enableSsl: true,
+  connectTimeout: 5000,
+  readTimeout: 0 }
+----
+
+IMPORTANT: A `Cluster` built from a `Configuration` object requires at least one entry for `hosts` and fails to
+build without it. The `localhost` default listed below applies only when the `Cluster` is built programmatically,
+for example with `Cluster.open()`.
+
+NOTE: Not every setting is read from a `Configuration` object. The `path`, top-level `username` and `password`,
+`interceptors`, `auth.region` and `auth.serviceName` keys are ignored on that route, and the corresponding
+values must be supplied through the equivalent `Cluster.Builder` methods such as `path()`, `interceptors()` and
+`auth()`. Basic authentication credentials remain available on this route through the `auth.username` and
+`auth.password` keys.
+
 The following table describes the various configuration options for the Gremlin Driver:
 
 [width="100%",cols="3,10,^2",options="header"]
@@ -1114,7 +1171,7 @@ The following table describes the various configuration options for the Gremlin 
 |connectionPool.keepAliveTimeMillis | Idle time in milliseconds before TCP keep-alive probes begin on an otherwise idle connection. Enables `SO_KEEPALIVE` on the socket and, where supported (JDK 11+ on Linux/macOS via `TCP_KEEPIDLE`), sets the per-socket idle time. Set to `0` to disable. On `Cluster.Builder` also settable as `keepAliveTime(Duration)`. |30000
 |connectionPool.keyStore |The private key in JKS or PKCS#12 format. |_none_
 |connectionPool.keyStorePassword |The password of the `keyStore` if it is password-protected. |_none_
-|connectionPool.keyStoreType |`PKCS12` |_none_
+|connectionPool.keyStoreType |The format of the `keyStore`. Can be: `JKS` or `PKCS12`. |_none_
 |connectionPool.maxConnections |The maximum size of a connection pool for a host. |128
 |connectionPool.maxResponseHeaderBytes |The maximum size in bytes allowed for the HTTP response headers. |8192
 |connectionPool.maxWaitForConnection |The amount of time in milliseconds to wait for a new connection before timing out. |16000
