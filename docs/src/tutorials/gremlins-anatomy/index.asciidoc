@@ -59,6 +59,17 @@ _`g.V()`_ - You are likely well acquainted with this bit of Gremlin. It is in vi
 documentation, blog posts, or examples and is likely the start of most every traversal you will write in your own
 applications.
 
+The examples that follow use the standard "modern" toy graph. In a stock Gremlin Console, its
+`GraphTraversalSource` is obtained by creating that graph and spawning a traversal source from it, at which point
+`g` is available for the traversals below. Readers new to the console can find a fuller walkthrough in the
+link:https://tinkerpop.apache.org/docs/x.y.z/tutorials/getting-started/[Getting Started] tutorial.
+
+[source,groovy]
+----
+graph = TinkerFactory.createModern()
+g = traversal().with(graph)
+----
+
 [gremlin-groovy,modern]
 ----
 g.V()
