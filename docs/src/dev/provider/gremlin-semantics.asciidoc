@@ -3319,9 +3319,34 @@ structure representing the hierarchical paths taken during traversal. As a side-
 side-effect and passes the traverser to the next step unchanged. The tree structure reflects the branching paths of the
 traversal, with each level representing a step in the path.
 
+When `by()` modulators are present, they are applied to the path objects level by level in the round-robin order
+described above, and the projected values become the tree nodes. Because a `Tree` keys its children by node value,
+sibling paths that project to the same value at the same level merge into a single node. The number and order of the
+modulators therefore determine the shape of the resulting tree, as shown below for one, two, and three modulators over
+the same three-level traversal.
+
+[gremlin-groovy,modern]
+----
+g.V(1).out('knows').out('created').tree().by('name')                        <1>
+g.V(1).out('knows').out('created').tree().by('name').by(label)             <2>
+g.V(1).out('knows').out('created').tree().by('name').by(label).by(label)   <3>
+----
+
+<1> A single modulator projects every level by `name`, so each distinct name forms its own branch.
+<2> Two modulators alternate `name` and `label`, so the second level collapses onto the shared label value while the
+first and third levels remain keyed by `name`.
+<3> Three modulators apply one projection per level, and the two software vertices at the third level share the same
+label value and merge into a single node.
+
+A `by()` modulator that yields no value for a given path object collapses that level for that path. The unproductive
+object contributes no node, and the next productive object attaches to the node produced for the previous level rather
+than to a node of its own. This shortens the affected branch and can change the overall shape of the tree, so a
+modulator that filters or projects to an absent value is not shape-neutral.
+
 *Exceptions:*
 
-None
+When invoked with a side-effect key, the key must be a non-null, non-empty string. Supplying `null` or the empty string
+raises an `Argument Error`.
 
 See: link:https://github.com/apache/tinkerpop/tree/x.y.z/gremlin-core/src/main/java/org/apache/tinkerpop/gremlin/process/traversal/step/map/TreeStep.java[source],
 link:https://github.com/apache/tinkerpop/tree/x.y.z/gremlin-core/src/main/java/org/apache/tinkerpop/gremlin/process/traversal/step/sideEffect/TreeSideEffectStep.java[source (sideEffect)],
