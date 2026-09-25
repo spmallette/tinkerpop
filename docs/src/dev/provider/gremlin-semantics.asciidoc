@@ -3124,6 +3124,34 @@ None
 
 Null values from the incoming traverser are not processed and remain as null when returned.
 
+The separator determines how the incoming string is tokenized, and the returned `LIST` never contains the separator
+itself. A null separator splits the string on runs of whitespace, so a sequence of consecutive whitespace characters
+acts as a single delimiter and any leading or trailing whitespace produces no empty tokens. A string that contains only
+whitespace therefore yields an empty `LIST`.
+
+[gremlin-groovy,modern]
+----
+g.inject(" a b  c ").split(null)
+g.inject("   ").split(null)
+----
+
+A non-empty separator splits the string on each occurrence of the separator. Consecutive separators and a leading
+separator do not produce empty tokens, while a trailing separator produces a single trailing empty token.
+
+[gremlin-groovy,modern]
+----
+g.inject(",a,,b,").split(",")
+----
+
+An empty separator splits the string into its individual characters, so every character including whitespace becomes its
+own token. An empty input string yields an empty `LIST`.
+
+[gremlin-groovy,modern]
+----
+g.inject("a b").split("")
+g.inject("").split("")
+----
+
 *Exceptions:*
 
 * For `Scope.global` or parameterless function calls, if the incoming traverser is a non-`STRING` value then an `Argument Error` is raised.
