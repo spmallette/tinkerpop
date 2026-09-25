@@ -602,7 +602,27 @@ attention to what it supports and does not support.
 * <<graph,*Graph API*>> - The <<graph-structure, Graph API>> (also referred to as the Structure API) is not always
 accessible to users. Its accessibility is dependent on the choice of graph system and programming language. It is
 therefore recommended that users avoid usage of methods like `Graph.addVertex()` or `Vertex.properties()` and instead
-prefer use of Gremlin with `g.addV()` or `g.V(1).properties()`.
+prefer use of Gremlin with `g.addV()` or `g.V(id).properties()`, where `id` is the identifier of a vertex that
+already exists in the graph.
+
+The following example demonstrates this recommended approach in practice. It opens a `TinkerGraph`, spawns a
+`GraphTraversalSource`, and adds a vertex through Gremlin rather than through the Graph API. The identifier assigned by
+the graph is read from the returned vertex and then used to look the vertex up again, since the value a graph assigns to
+an element is not guaranteed to be a predictable number such as `1`. Because `TinkerGraph` accepts any JVM object as a
+property value, the example also stores a non-primitive value and reads it back through the same traversal. A graph that
+supports only a restricted set of types would reject such a value, which is the portability concern described above under
+Data types.
+
+[gremlin-groovy]
+----
+graph = TinkerGraph.open()
+g = traversal().with(graph)
+marko = g.addV('person').property('name','marko').next()
+markoId = marko.id()
+g.V(markoId).values('name')
+g.V(markoId).property('avatar', java.awt.Color.RED).iterate();[]
+g.V(markoId).values('avatar')
+----
 
 Outside of considering these points, the best practice for ensuring the greatest level of compatibility across graphs
 is to avoid <<connecting-embedded,embedded>> mode and stick to the traversal-based approaches explained in the
