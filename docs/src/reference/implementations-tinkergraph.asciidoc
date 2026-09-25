@@ -451,7 +451,9 @@ an index-backed lookup:
 
 [source,groovy]
 ----
-graph.createIndex("name", Vertex.class)   // <1>
+graph = TinkerFactory.createModern()      // <1>
+g = traversal().with(graph)
+graph.createIndex("name", Vertex.class)   // <2>
 names = ["marko", "josh", "peter", "vadas"]
 names.collect { name ->
     g.match("MATCH (p:person {name: \$who})-[:knows]->(f:person)",
@@ -460,6 +462,9 @@ names.collect { name ->
 }
 ----
 
-<1> Create the index once at graph setup time; all subsequent `match()` calls referencing `{name: $who}` use it
+<1> Instantiate the modern toy graph as the `TinkerGraph` instance `graph` and spawn its traversal source `g`. Any
+loaded `TinkerGraph` works here. The modern graph is used because the queries below reference its `person` vertices
+and `knows` edges.
+<2> Create the index once at graph setup time; all subsequent `match()` calls referencing `{name: $who}` use it
 automatically. Indexes created after a traversal source has already been built take effect on the next traversal
 execution.
