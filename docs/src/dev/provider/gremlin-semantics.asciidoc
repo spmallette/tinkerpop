@@ -854,7 +854,23 @@ None
 
 The `as()` step is not a real step, but a "step modulator" similar to `by()` and `option()`. It allows labeling a step
 for later access by steps like `select()` and `match()`. A step can have any number of labels associated with it, which
-is useful for referencing the same step multiple times in a future step.
+is useful for referencing the same step multiple times in a future step. A single step may carry more than one label,
+and each label is independently retrievable by a later step.
+
+[gremlin-groovy,modern]
+----
+g.V(1).as('a','b').select('a','b').by('name')
+g.V().as('a').out('created').as('b').select('a','b').by('name')
+----
+
+The same label may also be applied to more than one step. When a later `select()` does not specify a `Pop`, the label
+resolves to the value produced by the most recently visited labeled step, so the most recent assignment is the one that
+wins. An explicit `Pop` of `first`, `last`, or `all` instead selects the earliest match, the most recent match, or
+every match collected into a `LIST`.
+
+The labels of a step are maintained as a set of `STRING` values. Applying the same label to a step more than once
+therefore has no additional effect, and the empty string is accepted as an ordinary label. A label is expected to be a
+non-null `STRING`, as `NULL` is not a valid `STRING` argument.
 
 *Exceptions:*
 
