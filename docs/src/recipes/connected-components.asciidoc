@@ -79,29 +79,23 @@ A straightforward way to detect the various subgraphs with an OLTP traversal is 
 
 [gremlin-groovy,existing]
 ----
-g.V().emit(cyclicPath().or().not(both())).                                              <1>
-    repeat(__.where(without('a')).local(aggregate('a')).both()).until(cyclicPath()).    <2>
-    group().by(path().unfold().limit(1)).                                               <3>
-    by(path().unfold().dedup().fold()).                                                 <4>
-    select(values).unfold()                                                             <5>
+g.V().                                                                      <1>
+    map(__.emit().repeat(__.both().simplePath()).dedup().order().by(id).fold()).    <2>
+    dedup()                                                                 <3>
 ----
 
-<1> The initial emit() step allows for output of isolated vertices, in addition to the discovery of
-components as described in (2).
+<1> The `g.V()` scan visits every vertex in the graph and treats each one as the starting point for the discovery
+of a component.
 
-<2> The entire component to which the first returned vertex belongs, is visited. To allow for components of any
-structure, a repeat loop is applied that only stops for a particular branch of the component when it detects a cyclic
-path.  Collection `'a'` is used to keep track of visited vertices, for both subtraversals within a component
-and new traversals resulting from the `g.V()` linear scan.
+<2> For a given starting vertex the `emit()`-step outputs that vertex and the `repeat(both().simplePath())` clause
+walks outward across edges in both directions until no further vertex can be reached without revisiting one. The result
+is every vertex that belongs to the same weakly connected component as the starting vertex, including the starting
+vertex itself and any isolated vertex that has no neighbors. Ordering those vertices by their identifier with
+`order().by(id)` and collecting them with `fold()` produces a canonical list, so that every vertex of a component
+yields an identical list.
 
-<3> While `'a'` nicely keeps track of vertices already visited, the actual components need to be extracted from the
-path information. The `path().unfold().limit(1)` closure provides the starting vertex
-of surviving traversers, which can be used to group the components.
-
-<4> This clause collects the unique vertices from all paths with the same starting vertex, thus from the same
-weak component.
-
-<5> The values of the groupby map contain the lists of vertices making up the requested components.
+<3> Because every vertex of a component maps to the same canonical list, the final `dedup()` reduces those duplicates
+to a single entry per component and returns one list of vertices for each weakly connected component.
 
 === Small graph scalability
 
