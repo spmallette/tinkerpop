@@ -1250,10 +1250,12 @@ Remote systems like Gremlin Server and Remote Gremlin Providers respond to reque
 format and respond by serializing results to some format to be interpreted by the client. Requests are always
 serialized as JSON (`application/json`) and that behavior is not configurable. The `responseSerializer` option
 controls only the `Accept` header sent with each request and the deserialization of the response. For JVM-based
-languages, there is a single option for response serialization: GraphBinary.
+languages, GraphBinary is the default and the intended long-term option for response serialization. GraphSON is
+also currently selectable, as described in the note below.
 
-IMPORTANT: 4.0.0-beta.3 Release - There is temporary support for GraphSON in the Java driver which will help with
-testing, but it is expected that the drivers will only support GraphBinary when 4.0 is fully released.
+IMPORTANT: The Java driver currently retains support for GraphSON, which is useful primarily for testing. GraphBinary
+is the intended long-term serialization option for JVM-based languages, and GraphSON support is expected to be removed
+once 4.0 is fully released.
 
 It is important that the client and server have the same serializers configured in the same way or else one or the
 other will experience serialization exceptions and fail to always communicate. Discrepancy in serializer registration
@@ -1262,10 +1264,26 @@ the server-side, thus leaving the client to be configured manually. As an exampl
 
 [source,java]
 ----
+import org.apache.tinkerpop.gremlin.driver.Client;
+import org.apache.tinkerpop.gremlin.driver.Cluster;
+import org.apache.tinkerpop.gremlin.driver.remote.DriverRemoteConnection;
+import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.GraphTraversalSource;
+import org.apache.tinkerpop.gremlin.structure.io.IoRegistry;
+import org.apache.tinkerpop.gremlin.structure.io.binary.TypeSerializerRegistry;
+import org.apache.tinkerpop.gremlin.util.MessageSerializer;
+import org.apache.tinkerpop.gremlin.util.ser.GraphBinaryMessageSerializerV4;
+
+import static org.apache.tinkerpop.gremlin.process.traversal.AnonymousTraversalSource.traversal;
+
+// A graph provider that exposes custom types supplies an IoRegistry to register them. Substitute the
+// provider's registry instance here. When no provider registry is required, the serializer can be built
+// with its no-argument constructor: new GraphBinaryMessageSerializerV4().
 IoRegistry registry = ...; // an IoRegistry instance exposed by a specific graph provider
 TypeSerializerRegistry typeSerializerRegistry = TypeSerializerRegistry.build().addRegistry(registry).create();
 MessageSerializer serializer = new GraphBinaryMessageSerializerV4(typeSerializerRegistry);
 Cluster cluster = Cluster.build().
+                          addContactPoint("localhost").
+                          port(8182).
                           responseSerializer(serializer).
                           create();
 Client client = cluster.connect();
