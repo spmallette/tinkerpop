@@ -3048,9 +3048,30 @@ None
 
 *Considerations:*
 
-The behavior of reverse depends on the type of the incoming traverser. If the traverser is a string, then the string is
-reversed. If the traverser is iterable then a list containing the items in reverse
-order are returned. All other types (including null) are not processed and are returned unmodified.
+The behavior of `reverse()` depends on the type of the incoming traverser. A `STRING` is reversed character by
+character. A `LIST` is returned as a new `LIST` holding the same elements in reverse order, and a `SET` is likewise
+returned as a reversed `LIST` rather than a `SET`, because its elements are materialized into a `LIST` before being
+reversed. As a `SET` has no inherent ordering, the order of the resulting `LIST` is only meaningful when the `SET` has a
+defined iteration order.
+
+A `MAP` is not treated as a collection to be reversed and is returned unmodified. Every other type, including `NUMBER`,
+`BOOLEAN`, and `NULL`, is also returned unmodified.
+
+The following examples illustrate each case.
+
+[gremlin-groovy,modern]
+----
+g.inject("gremlin").reverse()                <1>
+g.inject(["a", "b", "c"]).reverse()          <2>
+g.inject([name: "marko", age: 29]).reverse() <3>
+g.inject(42).reverse()                       <4>
+g.inject(1).constant(null).reverse()         <5>
+----
+<1> A `STRING` is reversed character by character.
+<2> A `LIST` is returned with its elements in reverse order.
+<3> A `MAP` is returned unmodified.
+<4> A scalar `NUMBER` is returned unmodified.
+<5> A `NULL` is returned unmodified.
 
 *Exceptions:*
 
