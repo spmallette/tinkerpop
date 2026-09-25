@@ -329,8 +329,78 @@ In this mode, users will start by creating a `Graph` instance, followed by a `Gr
 from which Gremlin traversals are spawned. Graphs that allow this sort of direct instantiation are obviously ones
 that are JVM-based (or have a JVM-based connector) and directly implement TinkerPop interfaces.
 
+The embedded reference implementation is distributed through Maven Central under the `org.apache.tinkerpop` group. A
+project that embeds a graph depends on `gremlin-core`, which provides the traversal API, together with a graph
+implementation such as `tinkergraph-gremlin`. The Maven coordinates are:
+
+[source,xml]
+----
+<dependency>
+   <groupId>org.apache.tinkerpop</groupId>
+   <artifactId>gremlin-core</artifactId>
+   <version>x.y.z</version>
+</dependency>
+<dependency>
+   <groupId>org.apache.tinkerpop</groupId>
+   <artifactId>tinkergraph-gremlin</artifactId>
+   <version>x.y.z</version>
+</dependency>
+----
+
+The equivalent Gradle coordinates are:
+
+[source,groovy]
+----
+implementation 'org.apache.tinkerpop:gremlin-core:x.y.z'
+implementation 'org.apache.tinkerpop:tinkergraph-gremlin:x.y.z'
+----
+
+With those dependencies in place, a `Graph` instance is created. The imports required by the code throughout this
+section are listed alongside the first statement:
+
 [source,java]
+----
+// java standard library
+import java.util.List;
+
+// gremlin-core module
+import org.apache.tinkerpop.gremlin.structure.Graph;
+import org.apache.tinkerpop.gremlin.structure.Vertex;
+import org.apache.tinkerpop.gremlin.structure.T;
+import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.GraphTraversalSource;
+import static org.apache.tinkerpop.gremlin.process.traversal.AnonymousTraversalSource.traversal;
+
+// tinkergraph-gremlin module
+import org.apache.tinkerpop.gremlin.tinkergraph.structure.TinkerGraph;
+
 Graph graph = TinkerGraph.open();
+----
+
+A newly opened `TinkerGraph` is empty, so a traversal such as `g.V()` returns no results until the graph is populated.
+Vertices and edges can be added directly through the structure API, and their identifiers, labels, and property values
+can be read back through the same interfaces:
+
+[source,java]
+----
+Vertex marko = graph.addVertex(T.label, "person", "name", "marko", "age", 29);
+Vertex lop = graph.addVertex(T.label, "software", "name", "lop", "lang", "java");
+marko.addEdge("created", lop, "weight", 0.4d);
+
+Object markoId = marko.id();
+String markoLabel = marko.label();
+String markoName = marko.value("name");
+----
+
+Alternatively, one of the sample graphs bundled with TinkerGraph can be loaded with `TinkerFactory` rather than
+building the graph by hand. The "modern" toy graph used throughout this documentation is loaded as follows:
+
+[source,java]
+----
+// tinkergraph-gremlin module
+import org.apache.tinkerpop.gremlin.tinkergraph.structure.TinkerFactory;
+
+Graph graph = TinkerFactory.createModern();
+----
 
 The "graph" is then used to spawn a `GraphTraversalSource` as follows and typically, by convention, this variable is
 named "g":
@@ -338,7 +408,7 @@ named "g":
 [source,java]
 ----
 GraphTraversalSource g = traversal().with(graph);
-List<Vertex> vertices = g.V().toList()
+List<Vertex> vertices = g.V().toList();
 ----
 
 NOTE: It may be helpful to read the link:https://tinkerpop.apache.org/docs/x.y.z/tutorials/gremlins-anatomy/[Gremlin Anatomy]
