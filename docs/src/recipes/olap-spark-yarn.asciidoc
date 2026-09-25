@@ -33,8 +33,9 @@ configured differently. This recipe describes this configuration.
 Most configuration problems of TinkerPop with Spark on YARN stem from three reasons:
 
 1. `SparkGraphComputer` creates its own `SparkContext` so it does not get any configs from the usual `spark-submit` command.
-2. The TinkerPop Spark plugin did not include Spark on YARN runtime dependencies until version 3.2.7/3.3.1.
-3. Resolving reason 2 by adding the cluster's Spark jars to the classpath may create all kinds of version
+2. The Spark on YARN runtime dependencies bundled with the Spark plugin still need to be delivered to the YARN
+containers, which `spark-submit` would normally handle.
+3. Resolving reason 2 by adding the cluster's own Spark jars to the classpath may create all kinds of version
 conflicts with the TinkerPop dependencies.
 
 The current recipe follows a minimalist approach in which no dependencies are added to the dependencies
@@ -51,11 +52,28 @@ If you want to try the recipe on a local Hadoop pseudo-cluster, the easiest way 
 it is to look at the install script at link:https://github.com/apache/tinkerpop/blob/x.y.z/docker/hadoop/install.sh[install.sh]
 and the `start hadoop` section of link:https://github.com/apache/tinkerpop/blob/x.y.z/docker/scripts/build.sh[build.sh].
 
-This recipe assumes that you installed the Gremlin Console with the
+This recipe uses the Gremlin Console with the
 link:https://tinkerpop.apache.org/docs/x.y.z/reference/#spark-plugin[Spark plugin] (the
-link:https://tinkerpop.apache.org/docs/x.y.z/reference/#hadoop-plugin[Hadoop plugin] is optional). Your Hadoop cluster
-may have been configured to use file compression, e.g. LZO compression. If so, you need to copy the relevant
-jar (e.g. `hadoop-lzo-*.jar`) to Gremlin Console's `ext/spark-gremlin/lib` folder.
+link:https://tinkerpop.apache.org/docs/x.y.z/reference/#hadoop-plugin[Hadoop plugin] is optional). A fresh binary
+distribution does not ship with the Spark plugin installed, so install it from within the Gremlin Console:
+
+[source,text]
+----
+gremlin> :install org.apache.tinkerpop spark-gremlin x.y.z
+==>loaded: [org.apache.tinkerpop, spark-gremlin, x.y.z] - restart the console to use [tinkerpop.spark]
+----
+
+Then restart the console and activate the plugin:
+
+[source,text]
+----
+gremlin> :plugin use tinkerpop.spark
+==>tinkerpop.spark activated
+----
+
+Installing the plugin creates the `ext/spark-gremlin/lib` folder that the archive step in the "Running the job"
+section below relies on. If your Hadoop cluster has been configured to use file compression, e.g. LZO compression,
+copy the relevant jar (e.g. `hadoop-lzo-*.jar`) into that same `ext/spark-gremlin/lib` folder.
 
 For starting the Gremlin Console in the right environment, create a shell script (e.g. `bin/spark-yarn.sh`) with the
 contents below. Of course, actual values for `GREMLIN_HOME`, `HADOOP_HOME` and `HADOOP_CONF_DIR` need to be adapted to
@@ -66,8 +84,8 @@ your particular environment.
 #!/bin/bash
 # Variables to be adapted to the actual environment
 GREMLIN_HOME=/home/yourdir/lib/apache-tinkerpop-gremlin-console-x.y.z-standalone
-export HADOOP_HOME=/usr/local/lib/hadoop-3.3.1
-export HADOOP_CONF_DIR=/usr/local/lib/hadoop-3.3.1/etc/hadoop
+export HADOOP_HOME=/usr/local/lib/hadoop-3.4.3
+export HADOOP_CONF_DIR=/usr/local/lib/hadoop-3.4.3/etc/hadoop
 
 # Have TinkerPop find the hadoop cluster configs and hadoop native libraries
 export CLASSPATH=$HADOOP_CONF_DIR
@@ -93,9 +111,9 @@ $ . bin/spark-yarn.sh
 [source,groovy]
 ----
 gremlin> hadoop = System.getenv('HADOOP_HOME')
-==>/usr/local/lib/hadoop-3.3.1
+==>/usr/local/lib/hadoop-3.4.3
 gremlin> hadoopConfDir = System.getenv('HADOOP_CONF_DIR')
-==>/usr/local/lib/hadoop-3.3.1/etc/hadoop
+==>/usr/local/lib/hadoop-3.4.3/etc/hadoop
 gremlin> archive = 'spark-gremlin.zip'
 ==>spark-gremlin.zip
 gremlin> archivePath = "/tmp/$archive"
@@ -173,5 +191,5 @@ jar.
 
 You may not like the idea that the Hadoop and Spark jars from the TinkerPop distribution differ from the versions in
 your cluster. If so, just build TinkerPop from source with the corresponding dependencies changed in the various `pom.xml`
-files (e.g. `spark-core_2.11-2.2.0-some-vendor.jar` instead of `spark-core_2.11-2.2.0.jar`). Of course, TinkerPop will
+files (e.g. `spark-core_2.13-4.1.2-some-vendor.jar` instead of `spark-core_2.13-4.1.2.jar`). Of course, TinkerPop will
 only build for exactly matching or slightly differing artifact versions.
