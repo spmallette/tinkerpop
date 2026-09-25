@@ -818,7 +818,17 @@ None
 *Considerations:*
 
 Each value will be tested using the supplied predicate. Empty lists, null traversers, and non-list traversers will be
-filtered out of the Traversal Stream.
+filtered out of the Traversal Stream. A `LIST` traverser is produced by a step such as `fold()` or `inject()`. The
+examples below show, in order, a list with a matching value passing, a list with no matching value being filtered, an
+empty list being filtered, and a non-list traverser being filtered.
+
+[gremlin-groovy,modern]
+----
+g.inject([1,2,30]).any(gt(25))
+g.inject([1,2,3]).any(gt(25))
+g.inject([]).any(gt(25))
+g.inject(30).any(gt(25))
+----
 
 *Exceptions:*
 
