@@ -218,6 +218,8 @@ that don't have datetime vertices, and those neighbor vertices that have the lab
 
 [gremlin-groovy]
 ----
+graph = TinkerGraph.open();[]
+g = traversal().with(graph);[]
 g.addV().property("name", "A").as("a").
   addV().property("name", "B").as("b").
   addV().property("name", "C").as("c").
@@ -254,6 +256,12 @@ g.V().has("name", "A").out("rel").
         __.not(outE("occured_at")).coalesce(out().hasLabel("dimon"), identity())).
   elementMap()
 ----
+
+The second traversal supplied to `union()` handles those neighbors that have no `occured_at` edge. For each such
+neighbor, `coalesce()` first attempts to traverse to an adjacent vertex labelled "dimon" and returns that child vertex
+when one is present. This is why neighbor "C", which has no datetime but does have a "dimon" child, is represented in
+the results by that child "F" rather than by "C" itself. When a neighbor has no "dimon" child, `coalesce()` falls back
+to `identity()` and returns the neighbor unchanged, as is the case for "B".
 
 [[appendix-i]]
 _Use element labels in a `select`._
