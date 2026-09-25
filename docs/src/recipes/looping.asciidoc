@@ -103,7 +103,6 @@ g.V('A').
          group('x').
            by(loops())).
     emit().
-    times(3).
   cap('x')
 ----
 
