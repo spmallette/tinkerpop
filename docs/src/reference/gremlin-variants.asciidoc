@@ -160,7 +160,7 @@ To install the Gremlin-Go as a dependency for your project, run the following in
 
 [source,bash]
 ----
-go get github.com/apache/tinkerpop/gremlin-go/v3[optionally append @<version>, such as @v3.8.0]
+go get github.com/apache/tinkerpop/gremlin-go/v4[optionally append @<version>, such as @v4.0.0-beta.3]
 ----
 
 The following table outlines recommended runtime versions by the release in which their support began:
@@ -259,7 +259,7 @@ provide most of the typical functionality required to use Gremlin:
 [source,go]
 ----
 import (
-	"github.com/apache/tinkerpop/gremlin-go/driver"
+	"github.com/apache/tinkerpop/gremlin-go/v4/driver"
 )
 ----
 
@@ -491,7 +491,7 @@ Usage is as follows:
 
 [source,go]
 ----
-import "github.com/apache/tinkerpop/gremlin-go/v3/driver" <1>
+import "github.com/apache/tinkerpop/gremlin-go/v4/driver" <1>
 client, err := gremlingo.NewClient("http://localhost:8182/gremlin") <2>
 ----
 
