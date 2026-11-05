@@ -57,6 +57,16 @@ float.
 
 === Examples
 
+The traversals in this section run against the modern graph. The following creates it and the
+traversal source `g` used throughout, so the examples can be copied into a Gremlin Console session
+and run as they appear:
+
+[gremlin-groovy]
+----
+graph = TinkerFactory.createModern()
+g = traversal().with(graph)
+----
+
 The examples below introduce the people, then follow the two edge labels to explore who knows whom
 and who created what.
 
