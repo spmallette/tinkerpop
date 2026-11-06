@@ -298,6 +298,8 @@ _Sum edge weight with a coefficient._
 
 [gremlin-groovy]
 ----
+graph = TinkerGraph.open()
+g = traversal().with(graph)
 g.addV('person').property('name','alice').as('alice').
   addV('person').property('name','bobby').as('bobby').
   addV('person').property('name','cindy').as('cindy').
@@ -308,7 +310,7 @@ g.addV('person').property('name','alice').as('alice').
   addE('rates').from('cindy').to('david').property('tag','ruby').property('value',7).
   addE('rates').from('david').to('eliza').property('tag','ruby').property('value',6).
   addE('rates').from('alice').to('eliza').property('tag','java').property('value',9).iterate()
- g.withSack(1.0).V().has("name","alice").
+g.withSack(1.0).V().has("name","alice").
    repeat(outE("rates").has("tag","ruby").
           project("a","b","c").
             by(inV()).
