@@ -180,7 +180,7 @@ TinkerGraph has several settings that can be provided on creation via `Configura
 |gremlin.tinkergraph.edgeIdManager |The `IdManager` implementation to use for edges.
 |gremlin.tinkergraph.vertexPropertyIdManager |The `IdManager` implementation to use for vertex properties.
 |gremlin.tinkergraph.defaultVertexPropertyCardinality |The default `VertexProperty.Cardinality` to use when `Vertex.property(k,v)` is called.
-|gremlin.tinkergraph.allowNullPropertyValues |A boolean value that determines whether or not `null` property values are allowed and defaults to `false`.
+|gremlin.tinkergraph.allowNullPropertyValues |A boolean value that determines whether `null` property values are allowed and defaults to `false`. When `false`, setting a property to `null` raises no error and stores nothing: for a single-cardinality key any existing value for that key is removed, while for a `list` or `set` key the `null` is ignored.
 |gremlin.tinkergraph.vertexLabelCardinality |The `LabelCardinality` for vertices. Options are `ONE` (default, single immutable label, backward-compatible with 3.x), `ONE_OR_MORE` (at least one label, mutable), or `ZERO_OR_MORE` (zero or more labels). See <<tinkergraph-multi-label>>.
 |gremlin.tinkergraph.storage |The durable storage engine used by `TinkerStorageGraph` to persist committed transactions
 to disk. The value is either a built-in engine name (`graphbinary`) or a fully qualified class name of a
@@ -199,7 +199,7 @@ may be lost on an operating system crash or power loss. Only meaningful when `gr
 |gremlin.tinkergraph.storage.compactThreshold |The size in bytes at which a `TinkerStorageGraph` storage engine
 automatically compacts its append log, bounding the log growth and restart time of a long-running graph that is never
 explicitly closed. Defaults to `67108864` (64 MB). A value of `0` disables automatic compaction, leaving it to
-`close()` or an explicit `compact()`. A negative value fails the open. Only meaningful when
+`close()` or an explicit `compact()`. With a storage engine configured, a negative value fails the open. Only meaningful when
 `gremlin.tinkergraph.storage` is set.
 |gremlin.tinkergraph.storage.preserveVertexPropertyIds |Whether a `TinkerStorageGraph` storage engine persists
 vertex-property ids so they are stable across a close and reopen. Defaults to `false`, which regenerates every
@@ -212,8 +212,22 @@ directory unchanged. See <<tinkergraph-gremlin-persistence,Persistence>>. Only m
 `gremlin.tinkergraph.storage` is set.
 |=========================================================
 
-NOTE: To use <<tinkergraph-gremlin-tx, transactions>> and <<tinkergraph-gremlin-persistence, persistence>>, configure
-`gremlin.graph` as `org.apache.tinkerpop.gremlin.tinkergraph.structure.TinkerStorageGraph`.
+NOTE: Setting `gremlin.graph` to `org.apache.tinkerpop.gremlin.tinkergraph.structure.TinkerStorageGraph` selects the
+transactional, persistable implementation only when the graph is opened through `GraphFactory.open(conf)` or a Gremlin
+Server or Gremlin Console properties file, both of which read that key. A direct call to `TinkerGraph.open(conf)`
+ignores `gremlin.graph` and always returns an in-memory `TinkerMemoryGraph`. Using
+<<tinkergraph-gremlin-tx, transactions>> and <<tinkergraph-gremlin-persistence, persistence>> therefore requires
+opening the graph through one of those paths, or calling `TinkerStorageGraph.open(conf)` directly.
+
+A properties file that selects `TinkerStorageGraph` with the built-in `graphbinary` engine and an absolute storage
+directory looks like the following:
+
+[source,properties]
+----
+gremlin.graph=org.apache.tinkerpop.gremlin.tinkergraph.structure.TinkerStorageGraph
+gremlin.tinkergraph.storage=graphbinary
+gremlin.tinkergraph.storage.directory=/data/mygraph
+----
 
 The `IdManager` settings above refer to how TinkerGraph will control identifiers for vertices, edges and vertex
 properties.  There are several options for each of these settings: `ANY`, `LONG`, `INTEGER`, `UUID`, `STRING` or the
@@ -233,7 +247,7 @@ across JVM restarts. Moving data in and out of any TinkerGraph in an interchange
 `io()` step rather than by graph configuration, as shown below.
 
 It is important to consider the data being imported to TinkerGraph with respect to `defaultVertexPropertyCardinality`
-setting.  For example, if a `.gryo` file is known to contain multi-property data, be sure to set the default
+setting.  For example, if a `.kryo` (Gryo) file is known to contain multi-property data, be sure to set the default
 cardinality to `list` or else the data will import as `single`.  Consider the following:
 
 [gremlin-groovy]
