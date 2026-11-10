@@ -128,8 +128,8 @@ engines (<<sparkgraphcomputer,`SparkGraphComputer`>> refer to their respective d
 |gremlin.hadoop.graphWriter |The class that the graph output file(s) are written with (e.g. an `OutputFormat`).
 |gremlin.hadoop.jarsInDistributedCache |Whether to upload the Hadoop-Gremlin jars to a distributed cache (necessary if jars are not on the machines' classpaths).
 |gremlin.hadoop.defaultGraphComputer |The default `GraphComputer` to use when `graph.compute()` is called. This is optional.
-|gremlin.io.trusted |Enables the full OLAP IO behavior, permitting any reader/writer class, `GraphComputer.configure()` key, and the `ScriptInputFormat`/`ScriptOutputFormat` formats. Suits an in-process deployment that does not accept remote traversals. Defaults to `false`. This is optional.
-|gremlin.io.approvedClasses |A comma-separated allow-list of fully-qualified class names a remotely submitted traversal may load (e.g. a custom reader/writer, the Spark vertex-program interceptor, or `ScriptInputFormat`/`ScriptOutputFormat` to permit script IO). Ignored when `gremlin.io.trusted` is `true`. This is optional.
+|gremlin.io.trusted |Enables the full OLAP IO behavior, permitting any reader/writer class, `GraphComputer.configure()` key, and the `ScriptInputFormat`/`ScriptOutputFormat` formats. The four `gremlin.io.*` keys that govern this trust boundary are the one exception. They can never be set through `GraphComputer.configure()` or `io().with()`, even when `gremlin.io.trusted` is `true`, so a traversal cannot grant itself trust. Suits an in-process deployment that does not accept remote traversals. Defaults to `false`. This is optional.
+|gremlin.io.approvedClasses |A comma-separated allow-list of fully-qualified class names that may be loaded from a traversal's IO options when `gremlin.io.trusted` is `false` (e.g. a custom reader/writer, the Spark vertex-program interceptor, or `ScriptInputFormat`/`ScriptOutputFormat` to permit script IO). Ignored when `gremlin.io.trusted` is `true`. This is optional.
 |gremlin.io.approvedComputerConfigKeys |A comma-separated allow-list of OLAP computer-configuration keys a remotely submitted traversal may set via `GraphComputer.configure()`. Ignored when `gremlin.io.trusted` is `true`. This is optional.
 |gremlin.io.approvedGraphConfigKeys |A comma-separated allow-list of graph/IO configuration keys a remotely submitted traversal may set via `io().with(key, value)`. Separate from `gremlin.io.approvedComputerConfigKeys` (the two govern different surfaces). Ignored when `gremlin.io.trusted` is `true`. This is optional.
 |=========================================================
@@ -145,27 +145,38 @@ garbage collection issues, etc.
 [[remote-olap-configuration]]
 ==== Remote OLAP Configuration
 
-When an OLAP traversal is submitted remotely, the `io()` step and `GraphComputer.configure(key, value)` let that
-traversal introduce classes and configuration keys into the graph configuration. By default a remotely submitted
-traversal may use the built-in `gryo` and `graphson` formats together with the configuration keys Hadoop-Gremlin needs
-for normal execution. Any other reader or writer class, the `ScriptInputFormat` and `ScriptOutputFormat` formats, and
-any additional `io().with(key, value)` or `GraphComputer.configure(key, value)` key are applied only when they have
-been approved in the graph configuration. A class or key that has not been approved is rejected rather than loaded or
+When an OLAP traversal introduces classes and configuration keys into the graph configuration through the `io()`
+step or `GraphComputer.configure(key, value)`, those additions are gated unless the graph is trusted. The gate is
+governed by `gremlin.io.trusted` rather than by whether the traversal was submitted remotely, so it applies to any
+untrusted graph. A remotely submitted traversal is simply the typical source of untrusted IO options. By default the
+built-in `gryo` and `graphson` formats are permitted. For `GraphComputer.configure(key, value)`, `SparkGraphComputer`
+additionally permits the framework keys it sets for its own execution, namely `gremlin.spark.skipPartitioner`,
+`gremlin.spark.skipGraphCache`, and `gremlin.hadoop.vertexProgramInterceptor`. The `io().with(key, value)` surface has
+no built-in approved keys of its own, and the reader, writer, and registry it names are handled separately through the
+class allow-list. Any other reader or writer class, the `ScriptInputFormat` and `ScriptOutputFormat` formats, and any
+additional `io().with(key, value)` or `GraphComputer.configure(key, value)` key are applied only when they have been
+approved in the graph configuration. A class or key that has not been approved is rejected rather than loaded or
 applied.
 
 Approvals are declared through the properties listed above. `gremlin.io.approvedClasses` names the fully-qualified
 classes a remote traversal may load, such as a custom `InputFormat` or `OutputFormat`, a Spark vertex-program
-interceptor, or the script formats. `gremlin.io.approvedGraphConfigKeys` names the `io().with(key, value)` keys a
-remote traversal may set, and `gremlin.io.approvedComputerConfigKeys` names the `GraphComputer.configure(key, value)`
-keys it may set. The two key lists are kept separate because `io().with()` and `configure()` govern different
-configuration surfaces, so approving a key on one does not approve it on the other. Setting `gremlin.io.trusted` to
-`true` enables all of this configuration at once and suits an in-process deployment that does not accept remote
-traversals.
+interceptor, or the script formats. A reader, writer, or vertex-program interceptor class that is already declared in
+the graph's properties file is approved automatically and does not need to be repeated in `gremlin.io.approvedClasses`.
+The built-in Spark vertex-program interceptors are likewise always approved. `gremlin.io.approvedGraphConfigKeys` names
+the `io().with(key, value)` keys a remote traversal may set, and `gremlin.io.approvedComputerConfigKeys` names the
+`GraphComputer.configure(key, value)` keys it may set. The two key lists are kept separate because `io().with()` and
+`configure()` govern different configuration surfaces, so approving a key on one does not approve it on the other.
+Setting `gremlin.io.trusted` to `true` enables all of this configuration at once and suits an in-process deployment
+that does not accept remote traversals. The four `gremlin.io.*` keys that govern the trust boundary are the one
+exception. They can never be set through `io().with()` or `GraphComputer.configure()`, so a traversal cannot grant
+itself trust.
 
 These lists are meant for genuine tuning keys. The keys Hadoop-Gremlin sets for itself from the traversal or the graph
 properties file (`gremlin.hadoop.graphReader`, `gremlin.hadoop.graphWriter`, `gremlin.hadoop.graphFilter`,
 `gremlin.hadoop.defaultGraphComputer`, `gremlin.vertexProgram`, and `gremlin.mapReduce`) are managed by the framework
-and do not need to be added to them. The typed fluent setters on `SparkGraphComputer` such as `master(...)`,
+and do not need to be added to them. They are not on any built-in allow-list, so an untrusted traversal that passes one
+of them to `GraphComputer.configure(key, value)` is rejected unless an operator has explicitly approved it. The typed
+fluent setters on `SparkGraphComputer` such as `master(...)`,
 `serializer(...)`, `sparkKryoRegistrator(...)`, and `persistContext(...)` are called from embedded code and are
 unaffected by these lists.
 
