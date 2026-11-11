@@ -3454,7 +3454,14 @@ The following table outlines recommended runtime versions by the release in whic
 |3.7.0 |3.8-3.13 |aiohttp
 |3.7.3 |3.9-3.13 |aiohttp
 |3.8.0 |3.10-3.13 |aiohttp
+|4.0.0 |3.10-3.13 |aiohttp
 |===
+
+NOTE: The default `pip install gremlinpython` installs the latest stable release, which is still on the 3.x
+line. The 4.0.x driver is currently published only as a pre-release, so install it with
+`pip install --pre gremlinpython` or build it from source with `pip install ./gremlin-python/src/main/python`
+from a checkout of the TinkerPop repository. The 4.0.x driver targets a 4.0.x Gremlin Server and is not
+interchangeable with a server from the 3.x line.
 
 [[gremlin-python-connecting]]
 === Connecting
@@ -3463,6 +3470,16 @@ The pattern for connecting is described in <<connecting-gremlin,Connecting Greml
 creating a `GraphTraversalSource`. A `GraphTraversalSource` is created from the anonymous `traversal()` method where
 the "g" provided to the `DriverRemoteConnection` corresponds to the name of a `GraphTraversalSource` on the remote end.
 
+The examples throughout this section assume a running <<gremlin-server,Gremlin Server>> that exposes the standard
+"modern" toy graph. Start one from the server distribution with the bundled configuration:
+
+[source,bash]
+----
+bin/gremlin-server.sh conf/gremlin-server-modern.yaml
+----
+
+The outputs shown below are those produced against that graph.
+
 [source,python]
 ----
 g = traversal().with_(DriverRemoteConnection('http://localhost:8182/gremlin','g'))
@@ -3470,6 +3487,17 @@ g = traversal().with_(DriverRemoteConnection('http://localhost:8182/gremlin','g'
 
 The `traversal()` and `DriverRemoteConnection` references used throughout this section come from the imports listed
 in <<gremlin-python-imports,Common Imports>>.
+
+When the `DriverRemoteConnection` is created inline as above, retain a reference to it so that its underlying
+connection pool can be released when the traversal source is no longer needed:
+
+[source,python]
+----
+connection = DriverRemoteConnection('http://localhost:8182/gremlin','g')
+g = traversal().with_(connection)
+# ... build and submit traversals with g ...
+connection.close()
+----
 
 If you need to send additional headers on each HTTP request, set them via a request interceptor rather than a
 connection parameter. Pass a callable to the `interceptors` keyword argument that mutates the request headers in
@@ -3568,7 +3596,6 @@ from gremlin_python.process.traversal import TextP
 from gremlin_python.process.traversal import Pop
 from gremlin_python.process.traversal import Scope
 from gremlin_python.process.traversal import Barrier
-from gremlin_python.process.traversal import Bindings
 from gremlin_python.process.traversal import WithOptions
 ----
 
@@ -3611,7 +3638,7 @@ include:
 [source,python]
 ----
 from gremlin_python.statics import long         # Java long
-from gremlin_python.statics import timestamp    # Java timestamp
+from gremlin_python.statics import bigint       # Java BigInteger
 from gremlin_python.statics import SingleByte   # Java byte type
 from gremlin_python.statics import SingleChar   # Java char type
 from gremlin_python.statics import GremlinType  # Java Class
@@ -3767,7 +3794,7 @@ Driver API (`client.transact()`).
 
 [source,python]
 ----
-g = traversal().with_remote(DriverRemoteConnection('http://localhost:8182/gremlin', 'g'))
+g = traversal().with_(DriverRemoteConnection('http://localhost:8182/gremlin', 'g'))
 
 tx = g.tx()
 gtx = tx.begin()
@@ -3789,7 +3816,7 @@ back if it raises. `execute_in_tx` returns whatever the function returns:
 
 [source,python]
 ----
-g = traversal().with_remote(DriverRemoteConnection('http://localhost:8182/gremlin', 'g'))
+g = traversal().with_(DriverRemoteConnection('http://localhost:8182/gremlin', 'g'))
 
 # no return value
 g.execute_in_tx(lambda gtx: gtx.addV('person').property('name', 'jorge').iterate())
@@ -3861,12 +3888,12 @@ Once a `Client` instance is ready, it is possible to issue some Gremlin:
 
 [source,python]
 ----
-result_set = client.submit('[1,2,3,4]')  <1>
+result_set = client.submit('g.inject(1,2,3,4)')  <1>
 future_results = result_set.all()  <2>
 results = future_results.result() <3>
 assert results == [1, 2, 3, 4] <4>
 
-future_result_set = client.submit_async('[1,2,3,4]') <5>
+future_result_set = client.submit_async('g.inject(1,2,3,4)') <5>
 result_set = future_result_set.result() <6>
 result = result_set.one() <7>
 assert results == [1, 2, 3, 4] <8>
@@ -3875,7 +3902,7 @@ assert result_set.done.done() <9>
 client.close() <10>
 ----
 
-<1> Submit a script that simply returns a `List` of integers.  This method blocks until the request is written to
+<1> Submit a traversal that injects a stream of integers. This method blocks until the request is written to
 the server and a `ResultSet` is constructed.
 <2> Even though the `ResultSet` is constructed, it does not mean that the server has sent back the results (or even
 evaluated the script potentially).  The `ResultSet` is just a holder that is awaiting the results from the server. The `all` method
@@ -3933,13 +3960,20 @@ might look like this:
 
 [source,python]
 ----
+from gremlin_python.process.anonymous_traversal import traversal
+from gremlin_python.process.graph_traversal import GraphTraversal, GraphTraversalSource
+from gremlin_python.process.graph_traversal import __ as AnonymousTraversal
+from gremlin_python.process.traversal import GremlinLang, P
+from gremlin_python.driver.driver_remote_connection import DriverRemoteConnection
+
+
 class SocialTraversal(GraphTraversal):
 
     def knows(self, person_name):
         return self.out('knows').has_label('person').has('name', person_name)
 
     def youngest_friends_age(self):
-        return self.out('knows').has_label('person').values('age').min()
+        return self.out('knows').has_label('person').values('age').min_()
 
     def created_at_least(self, number):
         return self.out_e('created').count().is_(P.gte(number))
@@ -3950,15 +3984,15 @@ class __(AnonymousTraversal):
 
     @classmethod
     def knows(cls, *args):
-        return cls.graph_traversal(None, None, Bytecode()).knows(*args)
+        return cls.graph_traversal(None, None, GremlinLang()).knows(*args)
 
     @classmethod
     def youngest_friends_age(cls, *args):
-        return cls.graph_traversal(None, None, Bytecode()).youngest_friends_age(*args)
+        return cls.graph_traversal(None, None, GremlinLang()).youngest_friends_age(*args)
 
     @classmethod
     def created_at_least(cls, *args):
-        return cls.graph_traversal(None, None, Bytecode()).created_at_least(*args)
+        return cls.graph_traversal(None, None, GremlinLang()).created_at_least(*args)
 
 
 class SocialTraversalSource(GraphTraversalSource):
@@ -3968,12 +4002,10 @@ class SocialTraversalSource(GraphTraversalSource):
         self.graph_traversal = SocialTraversal
 
     def persons(self, *args):
-        traversal = self.get_graph_traversal()
-        traversal.bytecode.add_step('V')
-        traversal.bytecode.add_step('hasLabel', 'person')
+        traversal = self.get_graph_traversal().V().has_label('person')
 
         if len(args) > 0:
-            traversal.bytecode.add_step('has', 'name', P.within(args))
+            traversal = traversal.has('name', P.within(*args))
 
         return traversal
 ----
@@ -3986,10 +4018,10 @@ be used:
 
 [source,python]
 ----
-social = traversal(SocialTraversalSource).with_remote(DriverRemoteConnection('http://localhost:8182/gremlin','g'))
+social = traversal(SocialTraversalSource).with_(DriverRemoteConnection('http://localhost:8182/gremlin','g'))
 social.persons('marko').knows('josh')
 social.persons('marko').youngest_friends_age()
-social.persons().filter(__.created_at_least(2)).count()
+social.persons().filter_(__.created_at_least(2)).count()
 ----
 
 [[gremlin-python-sugar]]
@@ -4075,7 +4107,7 @@ in Python. This means that in `gremlin-python` if these values are in a `Set`, y
 what is intended by Gremlin, since it follows Python's behavior.
 * The `subgraph()`-step returns a detached `Graph` data container exposing `vertices: dict` and `edges: dict`
 keyed by element id. The result is not a live `Graph` instance: mutating the dicts has no effect on the source
-graph, and it cannot be passed to `traversal().with(...)`. To re-query subgraph elements against the original
+graph, and it cannot be passed to `traversal().with_(...)`. To re-query subgraph elements against the original
 graph, extract their `id` and use `g.V(id)` / `g.E(id)` on the original `GraphTraversalSource`.
 * Use of the aiohttp library in the default transport requires the use of asyncio's event loop to run the async functions.
 This can be an issue in situations where the application calling Gremlin-Python is already using an event loop.
@@ -4093,7 +4125,7 @@ from asynchronous code using a thread.
 [source,python]
 ----
 def print_vertices():
-    g = traversal().with(DriverRemoteConnection("http://localhost:8182/gremlin"))
+    g = traversal().with_(DriverRemoteConnection("http://localhost:8182/gremlin"))
     # Do your traversal.
 
 async def run_in_thread():
