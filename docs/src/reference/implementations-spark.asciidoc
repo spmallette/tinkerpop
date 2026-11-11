@@ -35,13 +35,18 @@ arguably easier for developers to work with than native Hadoop MapReduce. Spark-
 the bulk-synchronous parallel, distributed message passing algorithm within Spark and thus, any `VertexProgram` can be
 executed over `SparkGraphComputer`.
 
-Furthermore the `lib/` directory should be distributed across all machines in the SparkServer cluster. For this purpose
-TinkerPop provides a helper script, which takes the Spark installation directory and the Spark machines as input:
+Furthermore the `spark-gremlin` library directory should be distributed across all machines in the SparkServer cluster.
+For this purpose TinkerPop provides a helper script, which takes the Spark installation directory and the Spark machines
+as input. The script determines which jars to distribute from the `HADOOP_GREMLIN_LIBS` environment variable, so that
+variable must reference the `spark-gremlin` library directory before the script is run:
 
 [source,shell]
+----
+export HADOOP_GREMLIN_LIBS=$GREMLIN_HOME/ext/spark-gremlin/lib
 bin/hadoop/init-tp-spark.sh /usr/local/spark spark@10.0.0.1 spark@10.0.0.2 spark@10.0.0.3
+----
 
-Once the `lib/` directory is distributed, `SparkGraphComputer` can be used as follows.
+Once the library directory is distributed, `SparkGraphComputer` can be used as follows.
 
 [gremlin-groovy]
 ----
@@ -51,7 +56,7 @@ g.V().count()
 g.V().out().out().values('name')
 ----
 
-NOTE: We no longer support lambda executions via `:remote` on the Gremlin Console starting in TinkerPop 4.
+NOTE: The `:remote` command is no longer supported in the Gremlin Console as of TinkerPop 4, so lambda-based executions can no longer be submitted through it.
 
 The `SparkGraphComputer` algorithm leverages Spark's caching abilities to reduce the amount of data shuffled across
 the wire on each iteration of the <<vertexprogram,`VertexProgram`>>. When the graph is loaded as a Spark RDD
@@ -75,7 +80,7 @@ image::spark-algorithm.png[width=775]
 |gremlin.hadoop.graphReader |A class for reading a graph-based RDD (e.g. an `InputRDD` or `InputFormat`).
 |gremlin.hadoop.graphWriter |A class for writing a graph-based RDD (e.g. an `OutputRDD` or `OutputFormat`).
 |gremlin.spark.graphStorageLevel |What `StorageLevel` to use for the cached graph during job execution (default `MEMORY_ONLY`).
-|gremlin.spark.persistContext |Whether to create a new `SparkContext` for every `SparkGraphComputer` or to reuse an existing one.
+|gremlin.spark.persistContext |Whether to create a new `SparkContext` for every `SparkGraphComputer` or to reuse an existing one (default `false`).
 |gremlin.spark.persistStorageLevel |What `StorageLevel` to use when persisted RDDs via `PersistedOutputRDD` (default `MEMORY_ONLY`).
 |========================================================
 
