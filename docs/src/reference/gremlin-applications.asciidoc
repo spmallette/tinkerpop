@@ -1302,11 +1302,19 @@ authentication: {
     credentialsDb: conf/tinkergraph-credentials.properties}}
 
 A quick way to get started with the `SimpleAuthenticator` is to use TinkerGraph for the "credentials graph" and the
-"sample" credential graph that is packaged with the server.  To secure the transport for the credentials,
-SSL should be enabled. For this Quick Start, a self-signed certificate will be created but this should not
-be used in a production environment.
+"sample" credential graph that is packaged with the server. The `credentialsDb` setting above points at
+`conf/tinkergraph-credentials.properties`, which loads the packaged credential store `data/credentials.kryo` through
+its `gremlin.tinkergraph.graphLocation` key. That sample store defines three users: `stephen` with the password
+`password`, `daniel` with the password `better-password`, and `marko` with the password `rainbow-dash`. To add or
+remove users, use the <<credentials-dsl,Credentials Graph DSL>> and then persist the updated graph back to
+`data/credentials.kryo` so that the server loads the changes the next time it starts.
 
-Generate the self-signed SSL certificate:
+To secure the transport for the credentials, SSL should be enabled. For this Quick Start, a self-signed certificate
+will be created but this should not be used in a production environment.
+
+Generate the self-signed SSL certificate by running `keytool` from the root of the Gremlin Server installation. Enter
+`changeit` at the keystore password prompts so that it matches the `keyStorePassword` configured below, and press
+RETURN at the key password prompt to reuse the keystore password:
 
 [source,text]
 ----
@@ -1362,17 +1370,44 @@ $ bin/gremlin-server.sh conf/gremlin-server-secure.yaml
 ----
 
 When SSL is enabled on the server, it must also be enabled on the client when connecting.  To connect to
-Gremlin Server with the <<gremlin-java,`gremlin-driver`>>, set the `credentials`, `enableSsl`, and `trustStore`
-when constructing the `Cluster`.
+Gremlin Server with the <<gremlin-java,`gremlin-driver`>>, set the `auth`, `enableSsl`, `trustStore`, and
+`trustStorePassword` when constructing the `Cluster`. The `trustStore` is the certificate generated above and its
+password is the one entered at the `keytool` prompts.
 
 [source,java]
+----
+import org.apache.tinkerpop.gremlin.driver.auth.Auth;
+
 Cluster cluster = Cluster.build().auth(Auth.basic("stephen", "password"))
-                                 .enableSsl(true).trustStore("server.jks").create();
+                                 .enableSsl(true)
+                                 .trustStore("server.jks")
+                                 .trustStorePassword("changeit").create();
+Client client = cluster.connect();
+List<Result> results = client.submit("g.V().count()").all().get();
+----
 
 If connecting with Gremlin Console, which utilizes `gremlin-driver` for remote script execution, use the provided
 `conf/remote-secure.yaml` file when defining the remote.  That file contains configuration for the username and
-password as well as enablement of SSL from the client side. Be sure to configure the trustStore if using self-signed
-certificates.
+password as well as enablement of SSL from the client side. When the server presents a self-signed certificate, add
+`trustStore` and `trustStorePassword` entries to the `connectionPool` section of `conf/remote-secure.yaml` so that
+the client trusts it.
+
+Construct the remote traversal source from that configuration file:
+
+[source,groovy]
+----
+g = traversal().with(DriverRemoteConnection.using('conf/remote-secure.yaml', 'g'))
+g.V().count()
+----
+
+To submit scripts instead, open a `Cluster` from the same file and connect a client:
+
+[source,groovy]
+----
+cluster = Cluster.open('conf/remote-secure.yaml')
+client = cluster.connect()
+client.submit('g.V().count()').all().get()
+----
 
 Similarly, Gremlin Server can be configured for REST and security. Follow the steps above for configuring the SSL
 certificate.
