@@ -47,15 +47,38 @@ This recipe is suitable for both a real external and a local pseudo Hadoop clust
 for the vanilla Hadoop pseudo-cluster, it has been reported to work on real clusters with Hadoop distributions
 from various vendors.
 
+The recipe is maintained against the software bundled with the TinkerPop binary distribution. The standalone Gremlin
+Console requires Java 17 or newer (TinkerPop currently supports Java 17 through 25) and ships Apache Hadoop 3.4.3 and
+Apache Spark 4.1.2, built for Scala 2.13. The pseudo-cluster described below installs the same Hadoop 3.4.3 release, so
+the Hadoop versions on the client and the cluster match.
+
 If you want to try the recipe on a local Hadoop pseudo-cluster, the easiest way to install
 it is to look at the install script at link:https://github.com/apache/tinkerpop/blob/x.y.z/docker/hadoop/install.sh[install.sh]
 and the `start hadoop` section of link:https://github.com/apache/tinkerpop/blob/x.y.z/docker/scripts/build.sh[build.sh].
+Those scripts expect the Hadoop version to be exported as `HADOOP_VERSION` (the value bundled with this distribution is
+`3.4.3`), install Hadoop under `/usr/local/lib/hadoop-3.4.3`, and copy the pseudo-cluster site configuration from
+link:https://github.com/apache/tinkerpop/blob/x.y.z/docker/hadoop/resources[docker/hadoop/resources] (`core-site.xml`,
+`hdfs-site.xml`, `mapred-site.xml` and `yarn-site.xml`) into `$HADOOP_HOME/etc/hadoop`. The pseudo-cluster formats a
+fresh HDFS namenode, starts its daemons as `root` over passwordless SSH to `localhost`, and creates an HDFS home
+directory for the current user.
 
-This recipe assumes that you installed the Gremlin Console with the
-link:https://tinkerpop.apache.org/docs/x.y.z/reference/#spark-plugin[Spark plugin] (the
-link:https://tinkerpop.apache.org/docs/x.y.z/reference/#hadoop-plugin[Hadoop plugin] is optional). Your Hadoop cluster
-may have been configured to use file compression, e.g. LZO compression. If so, you need to copy the relevant
-jar (e.g. `hadoop-lzo-*.jar`) to Gremlin Console's `ext/spark-gremlin/lib` folder.
+The standalone Gremlin Console distribution does not bundle the Spark plugin, so install it and restart the console:
+
+[source,text]
+----
+gremlin> :install org.apache.tinkerpop spark-gremlin x.y.z
+==>loaded: [org.apache.tinkerpop, spark-gremlin, x.y.z] - restart the console to use [tinkerpop.spark]
+gremlin> :q
+$ bin/gremlin.sh
+gremlin> :plugin use tinkerpop.spark
+==>tinkerpop.spark activated
+----
+
+The link:https://tinkerpop.apache.org/docs/x.y.z/reference/#spark-plugin[Spark plugin] depends on the
+link:https://tinkerpop.apache.org/docs/x.y.z/reference/#hadoop-plugin[Hadoop plugin], which is activated by default in
+the console and provides the `hdfs` helper used later in this recipe. A Hadoop cluster may be configured to use file
+compression, for example LZO compression. If so, copy the relevant jar (for example `hadoop-lzo-*.jar`) to the
+console's `ext/spark-gremlin/lib` folder.
 
 For starting the Gremlin Console in the right environment, create a shell script (e.g. `bin/spark-yarn.sh`) with the
 contents below. Of course, actual values for `GREMLIN_HOME`, `HADOOP_HOME` and `HADOOP_CONF_DIR` need to be adapted to
@@ -66,8 +89,8 @@ your particular environment.
 #!/bin/bash
 # Variables to be adapted to the actual environment
 GREMLIN_HOME=/home/yourdir/lib/apache-tinkerpop-gremlin-console-x.y.z-standalone
-export HADOOP_HOME=/usr/local/lib/hadoop-3.3.1
-export HADOOP_CONF_DIR=/usr/local/lib/hadoop-3.3.1/etc/hadoop
+export HADOOP_HOME=/usr/local/lib/hadoop-3.4.3
+export HADOOP_CONF_DIR=/usr/local/lib/hadoop-3.4.3/etc/hadoop
 
 # Have TinkerPop find the hadoop cluster configs and hadoop native libraries
 export CLASSPATH=$HADOOP_CONF_DIR
@@ -79,6 +102,14 @@ cd $GREMLIN_HOME
 export HADOOP_GREMLIN_LIBS=$GREMLIN_HOME/empty
 bin/gremlin.sh
 ----
+
+NOTE: On Java 17 and newer, the Spark driver, YARN application master, and executor JVMs require the `--add-opens`
+module-access flags that Spark needs on recent JDKs. Because `SparkGraphComputer` builds its own `SparkContext`
+instead of submitting through `spark-submit`, Spark does not apply these flags automatically. The `bin/gremlin.sh`
+script already sets them for the console process that runs the client-side driver. For the application master and the
+executors on a real cluster, set the same flags through the `spark.yarn.am.extraJavaOptions` and
+`spark.executor.extraJavaOptions` properties. Further options for the console process itself can be exported through
+`JDK_JAVA_OPTIONS` in `bin/spark-yarn.sh`.
 
 === Running the job
 
@@ -93,9 +124,9 @@ $ . bin/spark-yarn.sh
 [source,groovy]
 ----
 gremlin> hadoop = System.getenv('HADOOP_HOME')
-==>/usr/local/lib/hadoop-3.3.1
+==>/usr/local/lib/hadoop-3.4.3
 gremlin> hadoopConfDir = System.getenv('HADOOP_CONF_DIR')
-==>/usr/local/lib/hadoop-3.3.1/etc/hadoop
+==>/usr/local/lib/hadoop-3.4.3/etc/hadoop
 gremlin> archive = 'spark-gremlin.zip'
 ==>spark-gremlin.zip
 gremlin> archivePath = "/tmp/$archive"
@@ -147,7 +178,7 @@ Rather, it exploits the `spark.yarn.archive` property, which points to an archiv
 system and is loaded into the various YARN containers. As a result the `spark-gremlin.zip` archive becomes available
 as the directory named `+__spark_libs__+` in the YARN containers. The `spark.executor.extraClassPath` and
 `spark.yarn.appMasterEnv.CLASSPATH` properties point to the jars inside this directory.
-This is why they contain the `+./__spark_lib__/*+` item. Just because a Spark executor got the archive with
+This is why they contain the `+./__spark_libs__/*+` item. Just because a Spark executor got the archive with
 jars loaded into its container, does not mean it knows how to access them.
 
 Also the `HADOOP_GREMLIN_LIBS` mechanism is not used because it can not work for Spark on YARN as implemented (jars
@@ -162,7 +193,7 @@ follow-up OLAP queries answered faster, because you skip the overhead for gettin
 This recipe does most of the graph configuration in the Gremlin Console so that environment variables can be used and
 the chance of configuration mistakes is minimal. Once you have your setup working, it is probably easier to make a copy
 of the `conf/hadoop/hadoop-gryo.properties` file and put the property values specific to your environment there. This is
-also the right moment to take a look at the `spark-defaults.xml` file of your cluster, in particular the settings for
+also the right moment to take a look at the `spark-defaults.conf` file of your cluster, in particular the settings for
 the https://spark.apache.org/docs/latest/monitoring.html[Spark History Service], which allows you to access logs of
 finished applications via the YARN resource manager UI.
 
@@ -173,5 +204,5 @@ jar.
 
 You may not like the idea that the Hadoop and Spark jars from the TinkerPop distribution differ from the versions in
 your cluster. If so, just build TinkerPop from source with the corresponding dependencies changed in the various `pom.xml`
-files (e.g. `spark-core_2.11-2.2.0-some-vendor.jar` instead of `spark-core_2.11-2.2.0.jar`). Of course, TinkerPop will
+files (e.g. `spark-core_2.13-4.1.2-some-vendor.jar` instead of `spark-core_2.13-4.1.2.jar`). Of course, TinkerPop will
 only build for exactly matching or slightly differing artifact versions.
